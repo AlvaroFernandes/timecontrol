@@ -92,6 +92,7 @@ interface InvoiceItem {
 interface InvLineRow {
   key: string;
   date: string;
+  startTime?: string;
   description: string;
   rate: number | null;
   hours: number | null;
@@ -506,6 +507,11 @@ export default function WorkHoursTracker() {
   const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
   const processed     = processEntries(periodEntries,    settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
   const allProcessed  = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+  // For the weekly report: show all entries (including archived) but use TFN/ABN values
+  // from `processed` for active entries so they reflect the current period's budget,
+  // not the budget already consumed by archived entries.
+  const processedById = new Map(processed.map(e => [e.id, e]));
+  const weeklyData    = allProcessed.map(e => processedById.get(e.id) ?? e);
   const totals = processed.reduce<Totals>((a, e) => ({
     hours:       a.hours       + e.total,
     tfnHours:    a.tfnHours    + e.tfnPortion,
@@ -590,7 +596,7 @@ export default function WorkHoursTracker() {
           <EntriesList processed={processed} onEdit={handleEdit} onDelete={handleDelete} />
         )}
         {tab === "weekly" && (
-          <WeeklyReport processed={allProcessed} settings={settings} />
+          <WeeklyReport processed={weeklyData} settings={settings} />
         )}
         {tab === "tfn" && (
           <TFNReport processed={processed} totals={totals} settings={settings} periodStart={periodStart} periodEnd={periodEnd} />
@@ -1277,13 +1283,16 @@ function ABNInvoice({ processed, totals, settings, onAdvance, onItemsChange }: {
 
   const allRows: InvLineRow[] = [];
   for (const e of abnEntries) {
-    if (e.rABN > 0)  allRows.push({ key: e.id + "-r",  date: e.date, description: e.jobDescription,                      rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
-    if (e.otABN > 0) allRows.push({ key: e.id + "-ot", date: e.date, description: `${e.jobDescription} (overtime ×1.5)`,  rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
+    if (e.rABN > 0)  allRows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                      rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
+    if (e.otABN > 0) allRows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`,  rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
   }
   for (const item of extraItems) {
     allRows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
   }
-  allRows.sort((a, b) => a.date.localeCompare(b.date));
+  allRows.sort((a, b) => {
+    const d = a.date.localeCompare(b.date);
+    return d !== 0 ? d : (a.startTime ?? "").localeCompare(b.startTime ?? "");
+  });
 
   const addItem = () => {
     const amt = parseFloat(newAmt);
