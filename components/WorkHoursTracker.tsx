@@ -16,6 +16,13 @@ interface Entry {
   hourlyRate: number;
   breakMins: number;
   archived?: boolean;
+  ownerId?: string; // admin: the user_id who owns this entry
+}
+
+interface ManagedUser {
+  id: string;
+  name: string;
+  email: string;
 }
 
 interface ProcessedEntry extends Entry {
@@ -260,6 +267,7 @@ function rowToEntry(row: Record<string, unknown>): Entry {
     hourlyRate:     Number(row.hourly_rate),
     breakMins:      Number(row.break_mins) || 0,
     archived:       !!(row.archived),
+    ownerId:        row.user_id as string,
   };
 }
 
@@ -321,6 +329,10 @@ export default function WorkHoursTracker() {
   const [loading,        setLoading]        = useState(true);
   const [invoiceHistory, setInvoiceHistory] = useState<SavedInvoice[]>([]);
   const [viewingInvoice, setViewingInvoice] = useState<SavedInvoice | null>(null);
+  const [userRole,       setUserRole]       = useState<"user" | "admin">("user");
+  const [managedUsers,   setManagedUsers]   = useState<ManagedUser[]>([]);
+  const [adminEditEntry, setAdminEditEntry] = useState<Entry | null>(null);
+  const [adminUserFilter, setAdminUserFilter] = useState<string>("all");
 
   useEffect(() => {
     const saved = localStorage.getItem("wh_theme") as "light" | "dark" | null;
@@ -342,20 +354,62 @@ export default function WorkHoursTracker() {
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
 
-      const [{ data: entriesData }, { data: settingsData }, { data: invoicesData }] = await Promise.all([
-        supabase.from("entries").select("*").eq("user_id", user.id).order("date").order("start_time"),
-        supabase.from("settings").select("*").eq("user_id", user.id).maybeSingle(),
-        supabase.from("invoices").select("*").eq("user_id", user.id).order("invoice_num", { ascending: false }),
-      ]);
+      // Ensure profile exists (upsert without overwriting role/admin_id)
+      await supabase.from("profiles").upsert(
+        { user_id: user.id, email: user.email },
+        { onConflict: "user_id", ignoreDuplicates: true }
+      );
 
-      if (entriesData)  setEntries((entriesData as Record<string, unknown>[]).map(rowToEntry));
-      if (settingsData) {
-        const sd = settingsData as { data: Settings; period_start: string; period_end: string };
-        if (sd.data)         setSettings(s => ({ ...DEFAULT_SETTINGS, ...sd.data }));
-        if (sd.period_start) setPeriodStart(sd.period_start);
-        if (sd.period_end)   setPeriodEnd(sd.period_end);
+      const { data: profileData } = await supabase
+        .from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+      const role: "user" | "admin" = (profileData as Record<string, unknown> | null)?.role as "user" | "admin" ?? "user";
+      setUserRole(role);
+
+      if (role === "admin") {
+        // Load managed users and their entries
+        const { data: usersData } = await supabase
+          .from("profiles").select("*").eq("admin_id", user.id);
+        const users: ManagedUser[] = ((usersData ?? []) as Record<string, unknown>[]).map(p => ({
+          id:    p.user_id as string,
+          name:  (p.name as string) || (p.email as string) || "Unknown",
+          email: (p.email as string) || "",
+        }));
+        setManagedUsers(users);
+
+        if (users.length > 0) {
+          const { data: entriesData } = await supabase
+            .from("entries").select("*")
+            .in("user_id", users.map(u => u.id))
+            .order("date").order("start_time");
+          if (entriesData) setEntries((entriesData as Record<string, unknown>[]).map(rowToEntry));
+        }
+
+        const [{ data: settingsData }] = await Promise.all([
+          supabase.from("settings").select("*").eq("user_id", user.id).maybeSingle(),
+        ]);
+        if (settingsData) {
+          const sd = settingsData as { data: Settings; period_start: string; period_end: string };
+          if (sd.data)         setSettings(s => ({ ...DEFAULT_SETTINGS, ...sd.data }));
+          if (sd.period_start) setPeriodStart(sd.period_start);
+          if (sd.period_end)   setPeriodEnd(sd.period_end);
+        }
+      } else {
+        const [{ data: entriesData }, { data: settingsData }, { data: invoicesData }] = await Promise.all([
+          supabase.from("entries").select("*").eq("user_id", user.id).order("date").order("start_time"),
+          supabase.from("settings").select("*").eq("user_id", user.id).maybeSingle(),
+          supabase.from("invoices").select("*").eq("user_id", user.id).order("invoice_num", { ascending: false }),
+        ]);
+
+        if (entriesData)  setEntries((entriesData as Record<string, unknown>[]).map(rowToEntry));
+        if (settingsData) {
+          const sd = settingsData as { data: Settings; period_start: string; period_end: string };
+          if (sd.data)         setSettings(s => ({ ...DEFAULT_SETTINGS, ...sd.data }));
+          if (sd.period_start) setPeriodStart(sd.period_start);
+          if (sd.period_end)   setPeriodEnd(sd.period_end);
+        }
+        if (invoicesData) setInvoiceHistory((invoicesData as Record<string, unknown>[]).map(fromInvoiceRow));
       }
-      if (invoicesData) setInvoiceHistory((invoicesData as Record<string, unknown>[]).map(fromInvoiceRow));
+
       setLoading(false);
     };
     init();
@@ -381,7 +435,7 @@ export default function WorkHoursTracker() {
   };
 
   const saveEntry = async (entry: Entry, uid: string) => {
-    const { error } = await supabase.from("entries").upsert(entryToRow(entry, uid));
+    const { error } = await supabase.from("entries").upsert(entryToRow(entry, entry.ownerId ?? uid));
     if (error) showToast("Could not save entry", "err");
   };
 
@@ -434,19 +488,29 @@ export default function WorkHoursTracker() {
   };
 
   const handleEdit = (entry: ProcessedEntry) => {
-    setEditId(entry.id);
-    setForm({
-      date: entry.date, jobDescription: entry.jobDescription,
-      startTime: entry.startTime, endTime: entry.endTime,
-      hourlyRate: String(entry.hourlyRate),
-      breakMins: entry.breakMins ? String(entry.breakMins) : "",
-    });
-    setTab("log");
+    if (userRole === "admin") {
+      setAdminEditEntry(entry);
+    } else {
+      setEditId(entry.id);
+      setForm({
+        date: entry.date, jobDescription: entry.jobDescription,
+        startTime: entry.startTime, endTime: entry.endTime,
+        hourlyRate: String(entry.hourlyRate),
+        breakMins: entry.breakMins ? String(entry.breakMins) : "",
+      });
+      setTab("log");
+    }
+  };
+
+  const handleAdminSave = (updated: Entry) => {
+    setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
+    if (userId) saveEntry(updated, userId);
+    setAdminEditEntry(null);
+    showToast("Entry updated");
   };
 
   const handleDelete = (id: string) => {
-    const newEntries = entries.filter(e => e.id !== id);
-    setEntries(newEntries);
+    setEntries(prev => prev.filter(e => e.id !== id));
     removeEntry(id);
     showToast("Entry deleted");
   };
@@ -524,15 +588,21 @@ export default function WorkHoursTracker() {
 
   const tfnPct = Math.min(100, (totals.tfnHours / (settings.tfnLimit || 30)) * 100);
 
-  const TABS = [
-    { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
-    { id: "log",       label: "Log Entry",    icon: "ti-clock-plus"       },
-    { id: "entries",   label: "Entries",      icon: "ti-list"             },
-    { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
-    { id: "tfn",       label: "TFN Report",   icon: "ti-report"           },
-    { id: "abn",       label: "ABN Invoice",  icon: "ti-receipt"          },
-    { id: "history",   label: "Invoices",     icon: "ti-history"          },
-  ];
+  const TABS = userRole === "admin"
+    ? [
+        { id: "dashboard", label: "Dashboard",     icon: "ti-layout-dashboard" },
+        { id: "entries",   label: "Entries",        icon: "ti-list"             },
+        { id: "weekly",    label: "Weekly Report",  icon: "ti-calendar-week"   },
+      ]
+    : [
+        { id: "dashboard", label: "Dashboard",     icon: "ti-layout-dashboard" },
+        { id: "log",       label: "Log Entry",     icon: "ti-clock-plus"       },
+        { id: "entries",   label: "Entries",       icon: "ti-list"             },
+        { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
+        { id: "tfn",       label: "TFN Report",    icon: "ti-report"           },
+        { id: "abn",       label: "ABN Invoice",   icon: "ti-receipt"          },
+        { id: "history",   label: "Invoices",      icon: "ti-history"          },
+      ];
 
   if (loading) {
     return (
@@ -549,6 +619,11 @@ export default function WorkHoursTracker() {
         <div className="logo">
           <i className="ti ti-briefcase" aria-hidden="true" style={{ fontSize: 18, color: "var(--color-text-warning)" }} />
           SplitShift
+          {userRole === "admin" && (
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "var(--color-text-warning)", color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: "0.04em" }}>
+              ADMIN
+            </span>
+          )}
         </div>
         <div className="period-row">
           <span>Period:</span>
@@ -580,9 +655,10 @@ export default function WorkHoursTracker() {
       {/* Main content */}
       <main className="main-content">
         {tab === "dashboard" && (
-          <Dashboard totals={totals} tfnPct={tfnPct} settings={settings} processed={processed} />
+          <Dashboard totals={totals} tfnPct={tfnPct} settings={settings} processed={processed}
+            isAdmin={userRole === "admin"} users={managedUsers} />
         )}
-        {tab === "log" && (
+        {tab === "log" && userRole !== "admin" && (
           <LogEntry
             form={form} setForm={setForm} editId={editId}
             onSave={handleSave}
@@ -593,15 +669,17 @@ export default function WorkHoursTracker() {
           />
         )}
         {tab === "entries" && (
-          <EntriesList processed={processed} onEdit={handleEdit} onDelete={handleDelete} />
+          <EntriesList processed={processed} onEdit={handleEdit} onDelete={handleDelete}
+            isAdmin={userRole === "admin"} users={managedUsers}
+            userFilter={adminUserFilter} onUserFilterChange={setAdminUserFilter} />
         )}
         {tab === "weekly" && (
-          <WeeklyReport processed={weeklyData} settings={settings} />
+          <WeeklyReport processed={weeklyData} settings={settings} isAdmin={userRole === "admin"} />
         )}
-        {tab === "tfn" && (
+        {tab === "tfn" && userRole !== "admin" && (
           <TFNReport processed={processed} totals={totals} settings={settings} periodStart={periodStart} periodEnd={periodEnd} />
         )}
-        {tab === "abn" && (
+        {tab === "abn" && userRole !== "admin" && (
           <ABNInvoice processed={processed} totals={totals} settings={settings}
             periodStart={periodStart} periodEnd={periodEnd} onAdvance={advanceInvoice}
             onItemsChange={items => {
@@ -611,7 +689,7 @@ export default function WorkHoursTracker() {
             }}
           />
         )}
-        {tab === "history" && (
+        {tab === "history" && userRole !== "admin" && (
           <InvoiceHistory
             invoices={invoiceHistory}
             viewing={viewingInvoice}
@@ -630,6 +708,16 @@ export default function WorkHoursTracker() {
         )}
       </main>
 
+      {/* Admin entry edit modal */}
+      {adminEditEntry && (
+        <AdminEditModal
+          entry={adminEditEntry}
+          userName={managedUsers.find(u => u.id === adminEditEntry.ownerId)?.name ?? "Unknown"}
+          onSave={handleAdminSave}
+          onClose={() => setAdminEditEntry(null)}
+        />
+      )}
+
       {/* Toast */}
       {toast && (
         <div className={`toast ${toast.type}`} role="alert">
@@ -643,12 +731,85 @@ export default function WorkHoursTracker() {
 
 // ── Dashboard ──────────────────────────────────────────────────────────────────
 
-function Dashboard({ totals, tfnPct, settings, processed }: {
+function Dashboard({ totals, tfnPct, settings, processed, isAdmin, users }: {
   totals: Totals; tfnPct: number; settings: Settings; processed: ProcessedEntry[];
+  isAdmin?: boolean; users?: ManagedUser[];
 }) {
   const byDate: Record<string, ProcessedEntry[]> = {};
   processed.forEach(e => { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); });
   const dates = Object.keys(byDate).sort().reverse().slice(0, 10);
+
+  if (isAdmin && users) {
+    const userStats = users.map(u => {
+      const ue = processed.filter(e => e.ownerId === u.id);
+      return {
+        ...u,
+        entries: ue.length,
+        hours:   ue.reduce((a, e) => a + e.total, 0),
+        earnings: ue.reduce((a, e) => a + e.totalEarnings, 0),
+      };
+    }).sort((a, b) => b.hours - a.hours);
+
+    return (
+      <div>
+        <h2 className="sr-only">Admin dashboard</h2>
+        <div className="metric-grid">
+          <Metric label="Total hours"   value={fh(totals.hours)}   sub={`${processed.length} entries`} />
+          <Metric label="Total earnings" value={fc(totals.total)}  bold />
+          <Metric label="Users"          value={String(users.length)} sub="managed" />
+        </div>
+
+        {userStats.length > 0 && (
+          <div className="card mt-4" style={{ overflowX: "auto" }}>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>Users summary</p>
+            <table className="data-table">
+              <thead>
+                <tr><th>User</th><th>Entries</th><th>Hours</th><th>Earnings</th></tr>
+              </thead>
+              <tbody>
+                {userStats.map(u => (
+                  <tr key={u.id}>
+                    <td>
+                      <div style={{ fontWeight: 500 }}>{u.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{u.email}</div>
+                    </td>
+                    <td>{u.entries}</td>
+                    <td className="mono">{fh(u.hours)}</td>
+                    <td className="mono">{fc(u.earnings)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {dates.length > 0 && (
+          <div className="card mt-4" style={{ overflowX: "auto" }}>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>Recent days</p>
+            <table className="data-table">
+              <thead>
+                <tr><th>Date</th><th>User</th><th>Jobs</th><th>Hours</th><th>Earnings</th></tr>
+              </thead>
+              <tbody>
+                {dates.map(date => {
+                  const de = byDate[date];
+                  return de.map((e, i) => (
+                    <tr key={e.id}>
+                      {i === 0 && <td className="mono" style={{ fontSize: 12 }} rowSpan={de.length}>{fd(date)}</td>}
+                      <td style={{ fontSize: 12 }}>{users.find(u => u.id === e.ownerId)?.name ?? "—"}</td>
+                      <td style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{e.jobDescription}</td>
+                      <td className="mono">{fh(e.total)}</td>
+                      <td className="mono">{fc(e.totalEarnings)}</td>
+                    </tr>
+                  ));
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -814,32 +975,66 @@ function LogEntry({ form, setForm, editId, onSave, onCancel }: {
 
 // ── Entries List ───────────────────────────────────────────────────────────────
 
-function EntriesList({ processed, onEdit, onDelete }: {
+function EntriesList({ processed, onEdit, onDelete, isAdmin, users, userFilter, onUserFilterChange }: {
   processed: ProcessedEntry[];
   onEdit: (e: ProcessedEntry) => void;
   onDelete: (id: string) => void;
+  isAdmin?: boolean;
+  users?: ManagedUser[];
+  userFilter?: string;
+  onUserFilterChange?: (v: string) => void;
 }) {
+  const visible = isAdmin && userFilter && userFilter !== "all"
+    ? processed.filter(e => e.ownerId === userFilter)
+    : processed;
+
   return (
     <div>
       <h2 className="sr-only">All entries for current period</h2>
-      {processed.length === 0 ? (
+
+      {isAdmin && users && users.length > 0 && (
+        <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+          <label htmlFor="user-filter" style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>Filter by user:</label>
+          <select
+            id="user-filter"
+            value={userFilter ?? "all"}
+            onChange={e => onUserFilterChange?.(e.target.value)}
+            style={{ fontSize: 13, padding: "4px 8px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-secondary)", color: "var(--color-text-primary)" }}
+          >
+            <option value="all">All users</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+          <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{visible.length} entries</span>
+        </div>
+      )}
+
+      {visible.length === 0 ? (
         <div className="empty-state">
           <i className="ti ti-list" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
-          <p>No entries in this period</p>
+          <p>No entries{isAdmin ? " for this selection" : " in this period"}</p>
         </div>
       ) : (
         <div className="card" style={{ overflowX: "auto" }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Date</th><th>Job</th><th>Time</th>
-                <th>Hours</th><th>Rate</th><th>Split</th><th>Earnings</th><th></th>
+                <th>Date</th>
+                {isAdmin && <th>User</th>}
+                <th>Job</th><th>Time</th>
+                <th>Hours</th><th>Rate</th>
+                {!isAdmin && <th>Split</th>}
+                <th>Earnings</th><th></th>
               </tr>
             </thead>
             <tbody>
-              {processed.map(e => (
+              {visible.map(e => (
                 <tr key={e.id}>
                   <td className="mono" style={{ fontSize: 12 }}>{fd(e.date)}</td>
+                  {isAdmin && (
+                    <td style={{ fontSize: 12 }}>
+                      {users?.find(u => u.id === e.ownerId)?.name ?? "—"}
+                    </td>
+                  )}
                   <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {e.jobDescription}
                   </td>
@@ -851,11 +1046,13 @@ function EntriesList({ processed, onEdit, onDelete }: {
                   </td>
                   <td className="mono">{fh(e.total)}</td>
                   <td className="mono">{fc(e.hourlyRate)}/h</td>
-                  <td style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
-                    {e.tfnPortion > 0 && <Bdg type="tfn">TFN {fh(e.tfnPortion)}</Bdg>}
-                    {e.abnPortion > 0 && <Bdg type="abn">ABN {fh(e.abnPortion)}</Bdg>}
-                    {e.overtime    > 0 && <Bdg type="ot">OT {fh(e.overtime)}</Bdg>}
-                  </td>
+                  {!isAdmin && (
+                    <td style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
+                      {e.tfnPortion > 0 && <Bdg type="tfn">TFN {fh(e.tfnPortion)}</Bdg>}
+                      {e.abnPortion > 0 && <Bdg type="abn">ABN {fh(e.abnPortion)}</Bdg>}
+                      {e.overtime    > 0 && <Bdg type="ot">OT {fh(e.overtime)}</Bdg>}
+                    </td>
+                  )}
                   <td className="mono">{fc(e.totalEarnings)}</td>
                   <td>
                     <span style={{ display: "flex", gap: 4 }}>
@@ -917,7 +1114,7 @@ interface WeekSummary {
   total: number;
 }
 
-function WeeklyReport({ processed, settings }: { processed: ProcessedEntry[]; settings: Settings }) {
+function WeeklyReport({ processed, settings, isAdmin }: { processed: ProcessedEntry[]; settings: Settings; isAdmin?: boolean }) {
   const [expanded,     setExpanded]     = React.useState<Record<string, boolean>>({});
   const [selectedWeek, setSelectedWeek] = React.useState<WeekSummary | null>(null);
   const [downloading,  setDownloading]  = React.useState(false);
@@ -1016,10 +1213,10 @@ function WeeklyReport({ processed, settings }: { processed: ProcessedEntry[]; se
               <th>Billed hrs</th>
               <th>Regular</th>
               <th>Overtime</th>
-              <th>TFN hrs</th>
-              <th>ABN hrs</th>
-              <th>TFN earnings</th>
-              <th>ABN earnings</th>
+              {!isAdmin && <th>TFN hrs</th>}
+              {!isAdmin && <th>ABN hrs</th>}
+              {!isAdmin && <th>TFN earnings</th>}
+              {!isAdmin && <th>ABN earnings</th>}
               <th>Total</th>
               <th></th>
             </tr>
@@ -1034,16 +1231,18 @@ function WeeklyReport({ processed, settings }: { processed: ProcessedEntry[]; se
                   <td className="mono">{fh(w.hours)}</td>
                   <td className="mono">{fh(w.regular)}</td>
                   <td className="mono">{w.overtime > 0 ? <Bdg type="ot">{fh(w.overtime)}</Bdg> : <span className="muted">—</span>}</td>
-                  <td className="mono">{w.tfnHours > 0 ? <Bdg type="tfn">{fh(w.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
-                  <td className="mono">{w.abnHours > 0 ? <Bdg type="abn">{fh(w.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
-                  <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>
-                  <td className="mono" style={{ color: "var(--color-text-info)" }}>{fc(w.abnEarnings)}</td>
+                  {!isAdmin && <td className="mono">{w.tfnHours > 0 ? <Bdg type="tfn">{fh(w.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>}
+                  {!isAdmin && <td className="mono">{w.abnHours > 0 ? <Bdg type="abn">{fh(w.abnHours)}</Bdg> : <span className="muted">—</span>}</td>}
+                  {!isAdmin && <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>}
+                  {!isAdmin && <td className="mono" style={{ color: "var(--color-text-info)" }}>{fc(w.abnEarnings)}</td>}
                   <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>
                   <td>
                     <span style={{ display: "flex", gap: 4 }}>
-                      <button className="icon-btn-sm no-print" onClick={() => setSelectedWeek(w)} aria-label="Print week report">
-                        <i className="ti ti-printer" aria-hidden="true" />
-                      </button>
+                      {!isAdmin && (
+                        <button className="icon-btn-sm no-print" onClick={() => setSelectedWeek(w)} aria-label="Print week report">
+                          <i className="ti ti-printer" aria-hidden="true" />
+                        </button>
+                      )}
                       <button
                         className="icon-btn-sm no-print"
                         onClick={() => setExpanded(prev => ({ ...prev, [w.weekStart]: !prev[w.weekStart] }))}
@@ -1071,10 +1270,10 @@ function WeeklyReport({ processed, settings }: { processed: ProcessedEntry[]; se
                     </td>
                     <td className="mono" style={{ fontSize: 12 }}>{fh(e.regular)}</td>
                     <td>{e.overtime > 0 ? <Bdg type="ot">{fh(e.overtime)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td>{e.tfnPortion > 0 ? <Bdg type="tfn">{fh(e.tfnPortion)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td>{e.abnPortion > 0 ? <Bdg type="abn">{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>
-                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{fc(e.abnEarnings)}</td>
+                    {!isAdmin && <td>{e.tfnPortion > 0 ? <Bdg type="tfn">{fh(e.tfnPortion)}</Bdg> : <span className="muted">—</span>}</td>}
+                    {!isAdmin && <td>{e.abnPortion > 0 ? <Bdg type="abn">{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>}
+                    {!isAdmin && <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>}
+                    {!isAdmin && <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{fc(e.abnEarnings)}</td>}
                     <td className="mono" style={{ fontSize: 12 }}>{fc(e.totalEarnings)}</td>
                     <td />
                   </tr>
@@ -1090,10 +1289,10 @@ function WeeklyReport({ processed, settings }: { processed: ProcessedEntry[]; se
               <td className="mono" style={{ fontWeight: 500 }}>{fh(grandTotal.hours)}</td>
               <td className="mono">{fh(grandTotal.regular)}</td>
               <td className="mono">{grandTotal.overtime > 0 ? <Bdg type="ot">{fh(grandTotal.overtime)}</Bdg> : <span className="muted">—</span>}</td>
-              <td className="mono">{grandTotal.tfnHours > 0 ? <Bdg type="tfn">{fh(grandTotal.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
-              <td className="mono">{grandTotal.abnHours > 0 ? <Bdg type="abn">{fh(grandTotal.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
-              <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>
-              <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>
+              {!isAdmin && <td className="mono">{grandTotal.tfnHours > 0 ? <Bdg type="tfn">{fh(grandTotal.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>}
+              {!isAdmin && <td className="mono">{grandTotal.abnHours > 0 ? <Bdg type="abn">{fh(grandTotal.abnHours)}</Bdg> : <span className="muted">—</span>}</td>}
+              {!isAdmin && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>}
+              {!isAdmin && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>}
               <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>
               <td />
             </tr>
@@ -1619,6 +1818,117 @@ function SavedInvoiceDoc({ inv }: { inv: SavedInvoice }) {
       <div className="inv-notes-box">
         <div className="inv-box-title">Additional notes</div>
         <div className="inv-box-content">{s.invoiceNotes || "-"}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Admin Edit Modal ───────────────────────────────────────────────────────────
+
+function AdminEditModal({ entry, userName, onSave, onClose }: {
+  entry: Entry;
+  userName: string;
+  onSave: (updated: Entry) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<FormState>({
+    date:           entry.date,
+    jobDescription: entry.jobDescription,
+    startTime:      entry.startTime,
+    endTime:        entry.endTime,
+    hourlyRate:     String(entry.hourlyRate),
+    breakMins:      entry.breakMins ? String(entry.breakMins) : "",
+  });
+  const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const breakMinsNum  = parseInt(form.breakMins || "0") || 0;
+  const previewRaw    = calcHours(form.startTime, form.endTime);
+  const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
+  const previewH      = Math.max(MIN_HOURS, previewActual);
+
+  const handleSave = () => {
+    if (!form.date || !form.jobDescription.trim() || !form.startTime || !form.endTime || !form.hourlyRate) return;
+    if (calcHours(form.startTime, form.endTime) <= 0) return;
+    onSave({
+      ...entry,
+      date:           form.date,
+      jobDescription: form.jobDescription.trim(),
+      startTime:      form.startTime,
+      endTime:        form.endTime,
+      hourlyRate:     parseFloat(form.hourlyRate),
+      breakMins:      parseInt(form.breakMins || "0") || 0,
+    });
+  };
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="card" style={{ width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div>
+            <p style={{ fontWeight: 600, margin: 0 }}>Edit Entry</p>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: 0 }}>{userName}</p>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">
+            <i className="ti ti-x" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="form-grid">
+          <div className="field full">
+            <label>Job description</label>
+            <input type="text" value={form.jobDescription} onChange={e => f("jobDescription", e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Date</label>
+            <input type="date" value={form.date} onChange={e => f("date", e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Hourly rate (AUD)</label>
+            <input type="number" min="0" step="0.01" value={form.hourlyRate} onChange={e => f("hourlyRate", e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Start time</label>
+            <input type="time" value={form.startTime} onChange={e => f("startTime", e.target.value)} />
+          </div>
+          <div className="field">
+            <label>End time</label>
+            <input type="time" value={form.endTime} onChange={e => f("endTime", e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Break (mins)</label>
+            <input type="number" min="0" step="5" value={form.breakMins} onChange={e => f("breakMins", e.target.value)} />
+          </div>
+        </div>
+
+        {previewRaw > 0 && (
+          <div className="preview-box">
+            <span>
+              <span className="muted">Billed: </span>
+              <strong className="mono">{fh(previewH)}</strong>
+            </span>
+            <span>
+              <span className="muted">Est. earnings: </span>
+              <strong className="mono" style={{ color: "var(--color-text-success)" }}>
+                {fc(previewH * parseFloat(form.hourlyRate || "0"))}
+              </strong>
+            </span>
+            {previewActual < previewRaw && (
+              <span className="muted" style={{ fontSize: 12 }}>after {breakMinsNum}m break</span>
+            )}
+          </div>
+        )}
+
+        <div className="btn-row">
+          <button className="btn-primary" onClick={handleSave}>
+            <i className="ti ti-check" aria-hidden="true" /> Update Entry
+          </button>
+          <button className="btn-secondary" onClick={onClose}>
+            <i className="ti ti-x" aria-hidden="true" /> Cancel
+          </button>
+        </div>
       </div>
     </div>
   );
