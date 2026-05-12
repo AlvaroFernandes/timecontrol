@@ -9,60 +9,10 @@ import type {
 } from "@/types";
 import { calcHours, processEntries, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc, fd, fdInv, todayStr, genId, buildPdfFilename, downloadPdf } from "@/lib/formatters";
-
-// ── Supabase row mappers ────────────────────────────────────────────────────────
-
-function rowToEntry(row: Record<string, unknown>): Entry {
-  return {
-    id:             row.id as string,
-    date:           row.date as string,
-    jobDescription: row.job_description as string,
-    startTime:      (row.start_time as string).slice(0, 5),
-    endTime:        (row.end_time   as string).slice(0, 5),
-    hourlyRate:     Number(row.hourly_rate),
-    breakMins:      Number(row.break_mins) || 0,
-    archived:       !!(row.archived),
-    ownerId:        row.user_id as string,
-  };
-}
-
-function entryToRow(entry: Entry, userId: string): Record<string, unknown> {
-  return {
-    id:              entry.id,
-    user_id:         userId,
-    date:            entry.date,
-    job_description: entry.jobDescription,
-    start_time:      entry.startTime,
-    end_time:        entry.endTime,
-    hourly_rate:     entry.hourlyRate,
-    break_mins:      entry.breakMins,
-    archived:        entry.archived ?? false,
-  };
-}
-
-function fromInvoiceRow(row: Record<string, unknown>): SavedInvoice {
-  return {
-    id:          row.id as string,
-    invoiceNum:  row.invoice_num as number,
-    issueDate:   row.issue_date as string,
-    companyName: (row.company_name as string) || "",
-    subtotal:    Number(row.subtotal),
-    createdAt:   row.created_at as string,
-    data:        row.data as SavedInvoice["data"],
-  };
-}
-
-// ── Default settings ───────────────────────────────────────────────────────────
-
-const DEFAULT_SETTINGS: Settings = {
-  yourName: "", abn: "", yourAddress: "", yourPhone: "", yourEmail: "",
-  tfnRate: "", defaultRate: "",
-  invoicePrefix: "INV", invoiceNum: 1, invoiceDate: "", invoiceItems: [],
-  companyName: "", companyAbn: "", companyAddress: "", companyEmail: "",
-  bankName: "", bsb: "", accountNumber: "", invoiceNotes: "",
-  tfnLimit: 30, overtimeThreshold: 12,
-  pdfNamePattern: "Invoice-{num}-{company}-{date}",
-};
+import { getEntries, getAdminEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
+import { DEFAULT_SETTINGS, getSettings, saveSettings as saveSettingsSvc } from "@/services/settings";
+import { ensureProfile, getProfile, getManagedUsers } from "@/services/profiles";
+import { getInvoices, saveInvoice, deleteInvoice, fromInvoiceRow } from "@/services/invoices";
 
 // ── Root App ───────────────────────────────────────────────────────────────────
 
@@ -109,60 +59,38 @@ export default function WorkHoursTracker() {
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
 
-      // Ensure profile exists (upsert without overwriting role/admin_id)
-      await supabase.from("profiles").upsert(
-        { user_id: user.id, email: user.email },
-        { onConflict: "user_id", ignoreDuplicates: true }
-      );
+      await ensureProfile(supabase, user.id, user.email);
 
-      const { data: profileData } = await supabase
-        .from("profiles").select("*").eq("user_id", user.id).maybeSingle();
-      const role: "user" | "admin" = (profileData as Record<string, unknown> | null)?.role as "user" | "admin" ?? "user";
+      const { role } = await getProfile(supabase, user.id);
       setUserRole(role);
 
       if (role === "admin") {
-        // Load managed users and their entries
-        const { data: usersData } = await supabase
-          .from("profiles").select("*").eq("admin_id", user.id);
-        const users: ManagedUser[] = ((usersData ?? []) as Record<string, unknown>[]).map(p => ({
-          id:    p.user_id as string,
-          name:  (p.name as string) || (p.email as string) || "Unknown",
-          email: (p.email as string) || "",
-        }));
+        const users = await getManagedUsers(supabase, user.id);
         setManagedUsers(users);
 
-        if (users.length > 0) {
-          const { data: entriesData } = await supabase
-            .from("entries").select("*")
-            .in("user_id", users.map(u => u.id))
-            .order("date").order("start_time");
-          if (entriesData) setEntries((entriesData as Record<string, unknown>[]).map(rowToEntry));
-        }
-
-        const [{ data: settingsData }] = await Promise.all([
-          supabase.from("settings").select("*").eq("user_id", user.id).maybeSingle(),
+        const [entries, settingsRow] = await Promise.all([
+          getAdminEntries(supabase, users.map(u => u.id)),
+          getSettings(supabase, user.id),
         ]);
-        if (settingsData) {
-          const sd = settingsData as { data: Settings; period_start: string; period_end: string };
-          if (sd.data)         setSettings(s => ({ ...DEFAULT_SETTINGS, ...sd.data }));
-          if (sd.period_start) setPeriodStart(sd.period_start);
-          if (sd.period_end)   setPeriodEnd(sd.period_end);
+        setEntries(entries);
+        if (settingsRow) {
+          setSettings(settingsRow.settings);
+          if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
+          if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
         }
       } else {
-        const [{ data: entriesData }, { data: settingsData }, { data: invoicesData }] = await Promise.all([
-          supabase.from("entries").select("*").eq("user_id", user.id).order("date").order("start_time"),
-          supabase.from("settings").select("*").eq("user_id", user.id).maybeSingle(),
-          supabase.from("invoices").select("*").eq("user_id", user.id).order("invoice_num", { ascending: false }),
+        const [entries, settingsRow, invoices] = await Promise.all([
+          getEntries(supabase, user.id),
+          getSettings(supabase, user.id),
+          getInvoices(supabase, user.id),
         ]);
-
-        if (entriesData)  setEntries((entriesData as Record<string, unknown>[]).map(rowToEntry));
-        if (settingsData) {
-          const sd = settingsData as { data: Settings; period_start: string; period_end: string };
-          if (sd.data)         setSettings(s => ({ ...DEFAULT_SETTINGS, ...sd.data }));
-          if (sd.period_start) setPeriodStart(sd.period_start);
-          if (sd.period_end)   setPeriodEnd(sd.period_end);
+        setEntries(entries);
+        if (settingsRow) {
+          setSettings(settingsRow.settings);
+          if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
+          if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
         }
-        if (invoicesData) setInvoiceHistory((invoicesData as Record<string, unknown>[]).map(fromInvoiceRow));
+        setInvoiceHistory(invoices);
       }
 
       setLoading(false);
@@ -190,20 +118,18 @@ export default function WorkHoursTracker() {
   };
 
   const saveEntry = async (entry: Entry, uid: string) => {
-    const { error } = await supabase.from("entries").upsert(entryToRow(entry, entry.ownerId ?? uid));
-    if (error) showToast("Could not save entry", "err");
+    const ok = await upsertEntry(supabase, entry, uid);
+    if (!ok) showToast("Could not save entry", "err");
   };
 
   const removeEntry = async (id: string) => {
-    const { error } = await supabase.from("entries").delete().eq("id", id);
-    if (error) showToast("Could not delete entry", "err");
+    const ok = await deleteEntry(supabase, id);
+    if (!ok) showToast("Could not delete entry", "err");
   };
 
   const saveSettings = async (s: Settings, ps: string, pe: string, uid: string) => {
-    const { error } = await supabase.from("settings").upsert({
-      user_id: uid, data: s, period_start: ps || null, period_end: pe || null,
-    });
-    if (error) showToast("Could not save settings", "err");
+    const ok = await saveSettingsSvc(supabase, uid, s, ps, pe);
+    if (!ok) showToast("Could not save settings", "err");
   };
 
   const signOut = async () => {
@@ -281,35 +207,36 @@ export default function WorkHoursTracker() {
     const abnEntries = processed.filter(e => e.abnPortion > 0);
     const rows: InvLineRow[] = [];
     for (const e of abnEntries) {
-      if (e.rABN > 0)  rows.push({ key: e.id + "-r",  date: e.date, description: e.jobDescription,                     rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
-      if (e.otABN > 0) rows.push({ key: e.id + "-ot", date: e.date, description: `${e.jobDescription} (overtime ×1.5)`, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
+      if (e.rABN > 0)  rows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                     rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
+      if (e.otABN > 0) rows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
     }
     for (const item of extraItems) rows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
-    rows.sort((a, b) => a.date.localeCompare(b.date));
+    rows.sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      return d !== 0 ? d : (a.startTime ?? "").localeCompare(b.startTime ?? "");
+    });
     const subtotal = totals.abnEarnings + extraItems.reduce((a, i) => a + i.amount, 0);
     const issueDate = settings.invoiceDate || todayStr();
 
-    // Archive all active entries in the current period
     const toArchiveIds = allPeriodEntries.filter(e => !e.archived).map(e => e.id);
     if (toArchiveIds.length > 0 && userId) {
-      await supabase.from("entries").update({ archived: true }).in("id", toArchiveIds);
+      const ok = await archiveEntries(supabase, toArchiveIds);
+      if (!ok) { showToast("Could not archive entries", "err"); return; }
       setEntries(prev => prev.map(e => toArchiveIds.includes(e.id) ? { ...e, archived: true } : e));
     }
 
     if (userId) {
-      const { data: saved, error } = await supabase.from("invoices").insert({
-        id: genId(), user_id: userId,
-        invoice_num: settings.invoiceNum || 1,
-        issue_date: issueDate,
-        company_name: settings.companyName || "",
+      const saved = await saveInvoice(supabase, {
+        id: genId(), userId,
+        invoiceNum:  settings.invoiceNum || 1,
+        issueDate,
+        companyName: settings.companyName || "",
         subtotal,
-        data: { settings: { ...settings, invoiceItems: [] }, rows, periodStart, periodEnd },
-      }).select().single();
-      if (error) {
-        showToast(`Could not save invoice history: ${error.message}`, "err");
-        return;
-      }
-      if (saved) setInvoiceHistory(prev => [fromInvoiceRow(saved as Record<string, unknown>), ...prev]);
+        settings: { ...settings, invoiceItems: [] },
+        rows, periodStart, periodEnd,
+      });
+      if (!saved) { showToast("Could not save invoice history", "err"); return; }
+      setInvoiceHistory(prev => [saved, ...prev]);
     }
 
     const s = { ...settings, invoiceNum: (settings.invoiceNum || 1) + 1, invoiceDate: todayStr(), invoiceItems: [] };
@@ -451,7 +378,7 @@ export default function WorkHoursTracker() {
             onView={setViewingInvoice}
             pdfNamePattern={settings.pdfNamePattern}
             onDelete={async id => {
-              await supabase.from("invoices").delete().eq("id", id);
+              await deleteInvoice(supabase, id);
               setInvoiceHistory(prev => prev.filter(i => i.id !== id));
               if (viewingInvoice?.id === id) setViewingInvoice(null);
               showToast("Invoice deleted");
