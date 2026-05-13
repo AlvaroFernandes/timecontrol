@@ -13,25 +13,58 @@ npm run start    # serve the production build
 
 ## Architecture
 
-Single-page app built with Next.js 15 App Router. The entire UI lives in one client component (`components/WorkHoursTracker.tsx`) rendered directly from `app/page.tsx`. There is no API layer — all data is persisted to `localStorage` under the key `wh_tracker_v1`.
+Single-page app built with Next.js 16 App Router. Auth is handled server-side in `proxy.ts` (Next.js 16 middleware). All data is persisted to Supabase (entries, settings, invoices, profiles).
 
 **Key files:**
 
-- `components/WorkHoursTracker.tsx` — the whole application: state management, calculation engine, and all view components
-- `app/globals.css` — CSS custom properties (design tokens for light/dark mode) and all app-shell styles; Tabler Icons webfont is imported here
+- `components/WorkHoursTracker.tsx` — root shell: calls `useAppData`, renders layout + tab routing
+- `hooks/useAppData.ts` — all app state, effects, and handlers; no Supabase calls here
+- `services/` — all Supabase queries, one file per domain:
+  - `entries.ts` — CRUD for work entries
+  - `settings.ts` — settings + period persistence; exports `DEFAULT_SETTINGS`
+  - `profiles.ts` — user profiles, roles, admin → worker relationships
+  - `invoices.ts` — saved invoice history
+- `lib/calculations.ts` — pure `processEntries` calculation engine; exports `calcHours`, `MIN_HOURS`
+- `lib/formatters.ts` — display helpers: `fh` (hours), `fc` (currency), `fd`/`fdInv` (dates), PDF utilities
+- `lib/supabase.ts` — browser Supabase client (`createBrowserClient`)
+- `lib/supabase-server.ts` — server Supabase client for Server Components / Route Handlers
+- `types/index.ts` — all TypeScript interfaces
+- `proxy.ts` — Next.js 16 auth proxy: redirects unauthenticated requests to `/login`
+- `app/globals.css` — CSS custom properties (design tokens for light/dark mode) and all app-shell styles
 - `app/layout.tsx` — Geist fonts, metadata
+- `app/login/page.tsx` — Supabase Auth UI login page
 
-**Calculation engine (`processEntries`):**
+**UI components** (`components/`):
 
-Entries are sorted chronologically, then processed in a single pass with two running accumulators:
-- `dayRun` — cumulative hours per calendar date (overtime kicks in at 12h/day at ×1.5)
-- `periodRun` — cumulative hours across the whole period (first `tfnLimit` hours → TFN salary; excess → ABN invoice)
+| File | Contents |
+|---|---|
+| `Dashboard.tsx` | Metrics grid + recent days summary (admin and user views) |
+| `LogEntry.tsx` | Add / edit entry form with live earnings preview |
+| `EntriesList.tsx` | Sortable entries table with per-user filter for admins |
+| `WeeklyReport.tsx` | Weekly breakdown table + printable timesheet PDF |
+| `TFNReport.tsx` | TFN salary timesheet (printable) |
+| `ABNInvoice.tsx` | ABN tax invoice with extra-items manager + PDF download |
+| `InvoiceHistory.tsx` | Saved invoice list + `SavedInvoiceDoc` viewer |
+| `AdminEditModal.tsx` | Overlay form for admin editing a worker's entry |
+| `SettingsPage.tsx` | Tabbed settings form (Personal, Company, Work Rules, Payment) |
+| `ui.tsx` | `Metric` card and `Bdg` (TFN/ABN/OT) badge primitives |
 
-These two splits are independent, producing four buckets per entry: `rTFN`, `otTFN`, `rABN`, `otABN`. The order entries appear in `processEntries` output is date+time sorted — this matters because TFN/ABN allocation is sequential.
+**Calculation engine (`processEntries` in `lib/calculations.ts`):**
 
-**Tabs:** Dashboard · Log Entry · Entries · TFN Report · ABN Invoice
+Entries are sorted chronologically, then processed in a single pass with two independent splits:
+- **Overtime** — hours beyond `overtimeThreshold` in a single entry → rate ×1.5
+- **TFN/ABN** — first `tfnLimit` cumulative hours → TFN salary; excess → ABN invoice
 
-**Styling approach:** Component uses plain CSS class names (`.card`, `.metric-grid`, `.data-table`, etc.) defined in `globals.css`. Tailwind is available but the existing component does not use utility classes — keep this consistent when extending the component. Design tokens follow the pattern `--color-{background|border|text}-{semantic}`.
+The intersection produces four buckets per entry: `rTFN`, `otTFN`, `rABN`, `otABN`. Sequential order matters because TFN/ABN allocation is cumulative across the period.
+
+**User roles:**
+
+- `user` — standard worker; has all tabs (Dashboard, Log Entry, Entries, Weekly Report, TFN Report, ABN Invoice, Invoices)
+- `admin` — managed via `profiles` table (`role = 'admin'`); sees combined entries for all workers under them; no Log Entry / TFN Report / ABN Invoice tabs
+
+**Tabs:** Dashboard · Log Entry · Entries · Weekly Report · TFN Report · ABN Invoice · Invoices
+
+**Styling approach:** Plain CSS class names (`.card`, `.metric-grid`, `.data-table`, etc.) defined in `globals.css`. Tailwind is available but not used — keep this consistent. Design tokens follow the pattern `--color-{background|border|text}-{semantic}`.
 
 **Icons:** `@tabler/icons-webfont` — use `<i className="ti ti-{icon-name}" />`.
 
