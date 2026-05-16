@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.18] - 2026-05-16
+
+### Performance
+- `hooks/useAppData.ts` — wrapped all handler and helper functions with `useCallback`: `showToast`, `saveEntry`, `removeEntry`, `saveSettings`, `signOut`, `toggleTheme`, `updatePeriod`, `handleSave`, `handleEdit`, `handleAdminSave`, `handleAdminClose` (new — extracted from inline JSX), `handleDelete`, `handleSettingsSave`, `handleSaveWorkerRules`, `handleInvite`, `advanceInvoice`, `handleCancelEdit`, `handleDeleteInvoice`, `updateInvoiceItems` (extracted from return object). Stable callback references let the `React.memo` wrappers from v0.5.17 actually skip re-renders — previously every render produced new function references that defeated memo equality checks
+- `components/WorkHoursTracker.tsx` — replaced the inline `() => setAdminEditEntry(null)` on `AdminEditModal.onClose` with the stable `handleAdminClose` callback
+
+---
+
 ## [0.5.17] - 2026-05-16
 
 ### Performance

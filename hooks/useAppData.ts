@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type {
@@ -48,12 +48,12 @@ export function useAppData() {
     document.documentElement.setAttribute("data-theme", initial);
   }, []);
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.setAttribute("data-theme", next);
     localStorage.setItem("wh_theme", next);
-  };
+  }, [theme]);
 
   useEffect(() => {
     const init = async () => {
@@ -120,37 +120,44 @@ export function useAppData() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, userId]);
 
-  const showToast = (msg: string, type: "ok" | "err" = "ok") => {
+  // setToast is a stable setter — no deps needed
+  const showToast = useCallback((msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3200);
-  };
+  }, []);
 
-  const saveEntry = async (entry: Entry, uid: string): Promise<boolean> => {
+  // supabase is stable (useRef) — omitted from deps intentionally
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const saveEntry = useCallback(async (entry: Entry, uid: string): Promise<boolean> => {
     return upsertEntry(supabase, entry, uid);
-  };
+  }, []);
 
-  const removeEntry = async (id: string): Promise<boolean> => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const removeEntry = useCallback(async (id: string): Promise<boolean> => {
     return deleteEntry(supabase, id);
-  };
+  }, []);
 
-  const saveSettings = async (s: Settings, ps: string, pe: string, uid: string) => {
+  // supabase stable; showToast only reads stable setToast
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const saveSettings = useCallback(async (s: Settings, ps: string, pe: string, uid: string) => {
     const ok = await saveSettingsSvc(supabase, uid, s, ps, pe);
     if (!ok) showToast("Could not save settings", "err");
-  };
+  }, []);
 
-  const signOut = async () => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     router.push("/login");
-  };
+  }, []);
 
-  const updatePeriod = (field: "start" | "end", val: string) => {
+  const updatePeriod = useCallback((field: "start" | "end", val: string) => {
     const ps = field === "start" ? val : periodStart;
     const pe = field === "end"   ? val : periodEnd;
     if (field === "start") setPeriodStart(ps); else setPeriodEnd(pe);
     if (userId) saveSettings(settings, ps, pe, userId);
-  };
+  }, [periodStart, periodEnd, userId, settings]); // saveSettings is stable
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     const { date, jobDescription, startTime, endTime, hourlyRate } = form;
     if (!date || !jobDescription.trim() || !startTime || !endTime || !hourlyRate) {
       showToast("All fields are required", "err"); return;
@@ -180,9 +187,9 @@ export function useAppData() {
     showToast(editId ? "Entry updated" : "Entry added");
     setEditId(null);
     setForm({ date: form.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: settings.defaultRate || "", breakMins: "" });
-  };
+  }, [form, editId, userId, entries, settings.defaultRate]); // showToast/saveEntry/setters are stable
 
-  const handleEdit = (entry: ProcessedEntry) => {
+  const handleEdit = useCallback((entry: ProcessedEntry) => {
     if (userRole === "admin") {
       setAdminEditEntry(entry);
     } else {
@@ -195,31 +202,33 @@ export function useAppData() {
       });
       setTab("log");
     }
-  };
+  }, [userRole]); // setters are stable
 
-  const handleAdminSave = async (updated: Entry) => {
+  const handleAdminSave = useCallback(async (updated: Entry) => {
     if (!userId) return;
     const ok = await saveEntry(updated, updated.ownerId ?? userId);
     if (!ok) { showToast("Could not save entry", "err"); return; }
     setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
     setAdminEditEntry(null);
     showToast("Entry updated");
-  };
+  }, [userId]); // saveEntry/showToast/setters are stable
 
-  const handleDelete = async (id: string) => {
+  const handleAdminClose = useCallback(() => setAdminEditEntry(null), []); // setAdminEditEntry is stable
+
+  const handleDelete = useCallback(async (id: string) => {
     const ok = await removeEntry(id);
     if (!ok) { showToast("Could not delete entry", "err"); return; }
     setEntries(prev => prev.filter(e => e.id !== id));
     showToast("Entry deleted");
-  };
+  }, []); // removeEntry/showToast/setEntries are stable
 
-  const handleSettingsSave = (s: Settings) => {
+  const handleSettingsSave = useCallback((s: Settings) => {
     setSettings(s);
     if (userId) saveSettings(s, periodStart, periodEnd, userId);
     showToast("Settings saved");
-  };
+  }, [userId, periodStart, periodEnd]); // saveSettings/showToast/setSettings are stable
 
-  const handleSaveWorkerRules = async (
+  const handleSaveWorkerRules = useCallback(async (
     rules: { userId: string; tfnLimit: number; overtimeThreshold: number }[],
   ) => {
     const results = await Promise.all(
@@ -232,7 +241,8 @@ export function useAppData() {
     );
     if (results.some(ok => !ok)) showToast("Could not save some worker rules", "err");
     else showToast("Worker rules saved");
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workerSettings]); // supabase/showToast/setters are stable
 
   // ── Derived values ─────────────────────────────────────────────────────────
   // Memoised so processEntries (sort + multi-pass accumulation) only re-runs
@@ -304,7 +314,8 @@ export function useAppData() {
       ],
   [userRole]);
 
-  const handleInvite = async (email: string, role: "user" | "admin") => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleInvite = useCallback(async (email: string, role: "user" | "admin") => {
     const res = await fetch("/api/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -320,11 +331,11 @@ export function useAppData() {
       const users = await getManagedUsers(supabase, userId!);
       setManagedUsers(users);
     }
-  };
+  }, [userId]); // supabase/showToast/setters are stable
 
   // ── Invoice advance ────────────────────────────────────────────────────────
 
-  const advanceInvoice = async () => {
+  const advanceInvoice = useCallback(async () => {
     const extraItems = settings.invoiceItems || [];
     const abnEntries = processed.filter(e => e.abnPortion > 0);
     const rows: InvLineRow[] = [];
@@ -365,20 +376,28 @@ export function useAppData() {
     setSettings(s);
     if (userId) saveSettings(s, periodStart, periodEnd, userId);
     showToast(`Invoice #${settings.invoiceNum} saved`);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings, processed, totals, allPeriodEntries, userId, periodStart, periodEnd]); // supabase/showToast/setters stable
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditId(null);
     setForm({ date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "" });
-  };
+  }, []); // all stable setters
 
-  const handleDeleteInvoice = async (id: string) => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleDeleteInvoice = useCallback(async (id: string) => {
     const ok = await deleteInvoice(supabase, id);
     if (!ok) { showToast("Could not delete invoice", "err"); return; }
     setInvoiceHistory(prev => prev.filter(i => i.id !== id));
     if (viewingInvoice?.id === id) setViewingInvoice(null);
     showToast("Invoice deleted");
-  };
+  }, [viewingInvoice]); // supabase/showToast/setters are stable
+
+  const updateInvoiceItems = useCallback((items: Settings["invoiceItems"]) => {
+    const s = { ...settings, invoiceItems: items };
+    setSettings(s);
+    if (userId) saveSettings(s, periodStart, periodEnd, userId);
+  }, [settings, userId, periodStart, periodEnd]); // saveSettings/setSettings are stable
 
   return {
     // state
@@ -400,15 +419,10 @@ export function useAppData() {
     processed, weeklyData, totals, tfnPct, TABS,
     // handlers
     toggleTheme, signOut, updatePeriod,
-    handleSave, handleEdit, handleAdminSave,
+    handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
-    // inline settings update for ABN invoice items
-    updateInvoiceItems: (items: Settings["invoiceItems"]) => {
-      const s = { ...settings, invoiceItems: items };
-      setSettings(s);
-      if (userId) saveSettings(s, periodStart, periodEnd, userId);
-    },
+    updateInvoiceItems,
   };
 }

@@ -30,7 +30,7 @@ export default function WorkHoursTracker() {
     adminUserFilter, setAdminUserFilter,
     processed, weeklyData, totals, tfnPct, TABS,
     toggleTheme, signOut, updatePeriod,
-    handleSave, handleEdit, handleAdminSave,
+    handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
@@ -132,7 +132,7 @@ export default function WorkHoursTracker() {
           entry={adminEditEntry}
           userName={managedUsers.find(u => u.id === adminEditEntry.ownerId)?.name ?? "Unknown"}
           onSave={handleAdminSave}
-          onClose={() => setAdminEditEntry(null)}
+          onClose={handleAdminClose}
         />
       )}
 
