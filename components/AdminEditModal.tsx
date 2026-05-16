@@ -19,7 +19,7 @@ export function AdminEditModal({ entry, userName, onSave, onClose }: {
   });
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
-  const breakMinsNum  = parseInt(form.breakMins || "0") || 0;
+  const breakMinsNum  = Math.max(0, parseInt(form.breakMins || "0") || 0);
   const previewRaw    = calcHours(form.startTime, form.endTime);
   const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
   const previewH      = Math.max(MIN_HOURS, previewActual);
@@ -27,14 +27,16 @@ export function AdminEditModal({ entry, userName, onSave, onClose }: {
   const handleSave = () => {
     if (!form.date || !form.jobDescription.trim() || !form.startTime || !form.endTime || !form.hourlyRate) return;
     if (calcHours(form.startTime, form.endTime) <= 0) return;
+    const hourlyRateNum = parseFloat(form.hourlyRate);
+    if (isNaN(hourlyRateNum) || hourlyRateNum < 0) return;
     onSave({
       ...entry,
       date:           form.date,
       jobDescription: form.jobDescription.trim(),
       startTime:      form.startTime,
       endTime:        form.endTime,
-      hourlyRate:     parseFloat(form.hourlyRate),
-      breakMins:      parseInt(form.breakMins || "0") || 0,
+      hourlyRate:     hourlyRateNum,
+      breakMins:      breakMinsNum,
     });
   };
 

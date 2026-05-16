@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.15] - 2026-05-16
+
+### Fixed
+- `components/AdminEditModal.tsx` — `breakMins` clamped to `Math.max(0, ...)` so negative values cannot reach the calculation engine or DB; `hourlyRate` is now validated with `isNaN` + `< 0` guard before `onSave` is called, consistent with the same fix applied to `handleSave` in v0.5.11
+
+---
+
 ## [0.5.14] - 2026-05-16
 
 ### Fixed
