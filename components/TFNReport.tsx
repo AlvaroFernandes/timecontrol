@@ -2,7 +2,7 @@ import React from "react";
 import type { ProcessedEntry, Totals, Settings } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 
-export function TFNReport({ processed, totals, settings, periodStart, periodEnd }: {
+export const TFNReport = React.memo(function TFNReport({ processed, totals, settings, periodStart, periodEnd }: {
   processed: ProcessedEntry[]; totals: Totals; settings: Settings;
   periodStart: string; periodEnd: string;
 }) {
@@ -81,4 +81,4 @@ export function TFNReport({ processed, totals, settings, periodStart, periodEnd 
       )}
     </div>
   );
-}
+});

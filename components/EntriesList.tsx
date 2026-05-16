@@ -3,7 +3,7 @@ import type { ManagedUser, ProcessedEntry } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Bdg } from "./ui";
 
-export function EntriesList({ processed, onEdit, onDelete, isAdmin, users, userFilter, onUserFilterChange }: {
+export const EntriesList = React.memo(function EntriesList({ processed, onEdit, onDelete, isAdmin, users, userFilter, onUserFilterChange }: {
   processed: ProcessedEntry[];
   onEdit: (e: ProcessedEntry) => void;
   onDelete: (id: string) => void;
@@ -100,4 +100,4 @@ export function EntriesList({ processed, onEdit, onDelete, isAdmin, users, userF
       )}
     </div>
   );
-}
+});

@@ -79,7 +79,7 @@ function SavedInvoiceDoc({ inv }: { inv: SavedInvoice }) {
   );
 }
 
-export function InvoiceHistory({ invoices, viewing, onView, onDelete, pdfNamePattern }: {
+export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, viewing, onView, onDelete, pdfNamePattern }: {
   invoices: SavedInvoice[];
   viewing: SavedInvoice | null;
   onView: (inv: SavedInvoice | null) => void;
@@ -165,4 +165,4 @@ export function InvoiceHistory({ invoices, viewing, onView, onDelete, pdfNamePat
       </div>
     </div>
   );
-}
+});

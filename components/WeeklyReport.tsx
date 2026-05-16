@@ -119,7 +119,7 @@ interface Props {
   users?: ManagedUser[];
 }
 
-export function WeeklyReport({ processed, settings, isAdmin, users }: Props) {
+export const WeeklyReport = React.memo(function WeeklyReport({ processed, settings, isAdmin, users }: Props) {
   const [expanded,      setExpanded]      = React.useState<Record<string, boolean>>({});
   const [selectedWeek,  setSelectedWeek]  = React.useState<WeekSummary | null>(null);
   const [downloading,   setDownloading]   = React.useState(false);
@@ -331,7 +331,7 @@ export function WeeklyReport({ processed, settings, isAdmin, users }: Props) {
       </div>
     </div>
   );
-}
+});
 
 function WorkerFilter({ users, value, onChange }: { users: ManagedUser[]; value: string; onChange: (v: string) => void }) {
   return (

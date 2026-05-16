@@ -3,7 +3,7 @@ import type { ManagedUser, ProcessedEntry, Settings, Totals } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Metric, Bdg } from "./ui";
 
-export function Dashboard({ totals, tfnPct, settings, processed, isAdmin, users }: {
+export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, settings, processed, isAdmin, users }: {
   totals: Totals; tfnPct: number; settings: Settings; processed: ProcessedEntry[];
   isAdmin?: boolean; users?: ManagedUser[];
 }) {
@@ -147,4 +147,4 @@ export function Dashboard({ totals, tfnPct, settings, processed, isAdmin, users 
       )}
     </div>
   );
-}
+});

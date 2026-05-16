@@ -1,6 +1,6 @@
 import React from "react";
 
-export function Metric({ label, value, sub, color, progress, bold }: {
+export const Metric = React.memo(function Metric({ label, value, sub, color, progress, bold }: {
   label: string; value: string; sub?: string;
   color?: "success" | "info" | "warning" | "danger";
   progress?: number; bold?: boolean;
@@ -31,9 +31,9 @@ export function Metric({ label, value, sub, color, progress, bold }: {
       )}
     </div>
   );
-}
+});
 
-export function Bdg({ type, children }: { type: "tfn" | "abn" | "ot"; children: React.ReactNode }) {
+export const Bdg = React.memo(function Bdg({ type, children }: { type: "tfn" | "abn" | "ot"; children: React.ReactNode }) {
   const s: Record<string, React.CSSProperties> = {
     tfn: { background: "var(--color-background-success)", color: "var(--color-text-success)" },
     abn: { background: "var(--color-background-info)",    color: "var(--color-text-info)"    },
@@ -44,4 +44,4 @@ export function Bdg({ type, children }: { type: "tfn" | "abn" | "ot"; children: 
       {children}
     </span>
   );
-}
+});

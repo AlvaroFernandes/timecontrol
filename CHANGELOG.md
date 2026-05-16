@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.17] - 2026-05-16
+
+### Performance
+- Wrapped all tab-panel components and `ui.tsx` primitives with `React.memo`: `Dashboard`, `LogEntry`, `EntriesList`, `WeeklyReport`, `TFNReport`, `ABNInvoice`, `InvoiceHistory`, `AdminEditModal`, `SettingsPage`, `Metric`, `Bdg` — components now bail out of re-rendering when their props have not changed (e.g., when a toast appears/disappears or the admin modal opens while the active tab's data is unchanged)
+
+---
+
 ## [0.5.16] - 2026-05-16
 
 ### Performance

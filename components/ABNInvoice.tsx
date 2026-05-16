@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import type { ProcessedEntry, Totals, Settings, InvoiceItem, InvLineRow } from "@/types";
 import { fh, fdInv, todayStr, genId, buildPdfFilename, downloadPdf } from "@/lib/formatters";
 
-export function ABNInvoice({ processed, totals, settings, onAdvance, onItemsChange }: {
+export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, settings, onAdvance, onItemsChange }: {
   processed: ProcessedEntry[]; totals: Totals; settings: Settings;
   periodStart: string; periodEnd: string; onAdvance: () => void;
   onItemsChange: (items: InvoiceItem[]) => void;
@@ -187,4 +187,4 @@ export function ABNInvoice({ processed, totals, settings, onAdvance, onItemsChan
       )}
     </div>
   );
-}
+});

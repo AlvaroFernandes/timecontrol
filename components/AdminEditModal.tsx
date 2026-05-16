@@ -3,7 +3,7 @@ import type { Entry, FormState } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc } from "@/lib/formatters";
 
-export function AdminEditModal({ entry, userName, onSave, onClose }: {
+export const AdminEditModal = React.memo(function AdminEditModal({ entry, userName, onSave, onClose }: {
   entry: Entry;
   userName: string;
   onSave: (updated: Entry) => void;
@@ -112,4 +112,4 @@ export function AdminEditModal({ entry, userName, onSave, onClose }: {
       </div>
     </div>
   );
-}
+});

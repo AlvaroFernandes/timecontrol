@@ -3,7 +3,7 @@ import type { FormState } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc } from "@/lib/formatters";
 
-export function LogEntry({ form, setForm, editId, onSave, onCancel }: {
+export const LogEntry = React.memo(function LogEntry({ form, setForm, editId, onSave, onCancel }: {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   editId: string | null;
@@ -95,4 +95,4 @@ export function LogEntry({ form, setForm, editId, onSave, onCancel }: {
       </div>
     </div>
   );
-}
+});

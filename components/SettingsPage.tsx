@@ -20,7 +20,7 @@ interface Props {
   onInvite?: (email: string, role: "user" | "admin") => void;
 }
 
-export function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedAdmins, workerSettings, onSaveWorkerRules, onInvite }: Props) {
+export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedAdmins, workerSettings, onSaveWorkerRules, onInvite }: Props) {
   const [s, setS] = useState<Settings>({ ...DEFAULT_SETTINGS, ...settings });
   const [workerRules,    setWorkerRules]    = useState<WorkerRule[]>([]);
   const [inviteEmail,    setInviteEmail]    = useState("");
@@ -311,4 +311,4 @@ export function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedA
       </div>
     </div>
   );
-}
+});
