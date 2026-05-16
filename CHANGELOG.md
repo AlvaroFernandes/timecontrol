@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.14] - 2026-05-16
+
+### Fixed
+- `handleDeleteInvoice` in `hooks/useAppData.ts` — DB result is now checked before updating UI state; a failed delete no longer silently removes the invoice from the list and shows a success toast
+
+---
+
 ## [0.5.13] - 2026-05-16
 
 ### Security

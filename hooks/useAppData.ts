@@ -372,7 +372,8 @@ export function useAppData() {
   };
 
   const handleDeleteInvoice = async (id: string) => {
-    await deleteInvoice(supabase, id);
+    const ok = await deleteInvoice(supabase, id);
+    if (!ok) { showToast("Could not delete invoice", "err"); return; }
     setInvoiceHistory(prev => prev.filter(i => i.id !== id));
     if (viewingInvoice?.id === id) setViewingInvoice(null);
     showToast("Invoice deleted");
