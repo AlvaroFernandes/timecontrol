@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.13] - 2026-05-16
+
+### Security
+- `supabase/migrations/008_profiles_email_unique.sql` — added a partial unique index on `profiles.email` (where email is not null); previously the same address could be invited multiple times, creating duplicate or orphaned auth users
+
+---
+
 ## [0.5.12] - 2026-05-16
 
 ### Security
