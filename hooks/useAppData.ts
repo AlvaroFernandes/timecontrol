@@ -129,9 +129,8 @@ export function useAppData() {
     if (!ok) showToast("Could not save entry", "err");
   };
 
-  const removeEntry = async (id: string) => {
-    const ok = await deleteEntry(supabase, id);
-    if (!ok) showToast("Could not delete entry", "err");
+  const removeEntry = async (id: string): Promise<boolean> => {
+    return deleteEntry(supabase, id);
   };
 
   const saveSettings = async (s: Settings, ps: string, pe: string, uid: string) => {
@@ -197,9 +196,10 @@ export function useAppData() {
     showToast("Entry updated");
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    const ok = await removeEntry(id);
+    if (!ok) { showToast("Could not delete entry", "err"); return; }
     setEntries(prev => prev.filter(e => e.id !== id));
-    removeEntry(id);
     showToast("Entry deleted");
   };
 
