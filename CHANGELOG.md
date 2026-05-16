@@ -6,6 +6,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.12] - 2026-05-16
+
+### Security
+- `app/api/invite/route.ts` — email address is now trimmed and lowercased before being passed to `inviteUserByEmail`; trailing spaces or mixed-case addresses previously created duplicate accounts
+
+---
+
+## [0.5.11] - 2026-05-16
+
+### Fixed
+- `handleSave` in `hooks/useAppData.ts` — `hourlyRate` is now parsed and validated before building the entry: non-numeric strings (e.g. "abc") that previously passed the truthy check and stored NaN to the DB now show an error toast instead; `breakMins` is clamped to `Math.max(0, ...)` so negative values from a crafted request cannot reach the calculation engine
+
+---
+
 ## [0.5.10] - 2026-05-16
 
 ### Fixed

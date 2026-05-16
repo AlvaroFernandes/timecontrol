@@ -3,7 +3,9 @@ import { createClient as createServerClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 
 export async function POST(request: NextRequest) {
-  const { email, role } = await request.json() as { email?: string; role?: string };
+  const body = await request.json() as { email?: string; role?: string };
+  const email = body.email?.trim().toLowerCase();
+  const role  = body.role;
 
   if (!email || !["user", "admin"].includes(role ?? "")) {
     return NextResponse.json({ error: "email and role (user|admin) are required" }, { status: 400 });

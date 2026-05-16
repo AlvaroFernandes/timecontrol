@@ -154,13 +154,18 @@ export function useAppData() {
     if (!date || !jobDescription.trim() || !startTime || !endTime || !hourlyRate) {
       showToast("All fields are required", "err"); return;
     }
+    const hourlyRateNum = parseFloat(hourlyRate);
+    if (isNaN(hourlyRateNum) || hourlyRateNum < 0) {
+      showToast("Hourly rate must be a valid positive number", "err"); return;
+    }
+    const breakMinsNum = Math.max(0, parseInt(form.breakMins || "0") || 0);
     if (calcHours(startTime, endTime) <= 0) {
       showToast("End time must be after start time", "err"); return;
     }
     const entry: Entry = {
       ...form,
-      hourlyRate: parseFloat(hourlyRate),
-      breakMins:  parseInt(form.breakMins || "0") || 0,
+      hourlyRate: hourlyRateNum,
+      breakMins:  breakMinsNum,
       id: editId || genId(),
     };
     if (userId) {
