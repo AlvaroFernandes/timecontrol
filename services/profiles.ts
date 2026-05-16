@@ -23,17 +23,21 @@ async function resolveRootAdminId(supabase: SupabaseClient, adminId: string): Pr
   return (p?.role === "admin" && p?.admin_id) ? p.admin_id : adminId;
 }
 
+function rowsToUsers(data: unknown[]): ManagedUser[] {
+  return (data as Record<string, unknown>[]).map(p => ({
+    id:    p.user_id as string,
+    name:  (p.name as string) || (p.email as string) || "Unknown",
+    email: (p.email as string) || "",
+  }));
+}
+
 export async function getManagedUsers(supabase: SupabaseClient, adminId: string): Promise<ManagedUser[]> {
   const rootAdminId = await resolveRootAdminId(supabase, adminId);
   const { data } = await supabase
     .from("profiles").select("*")
     .eq("admin_id", rootAdminId)
     .eq("role", "user");
-  return ((data ?? []) as Record<string, unknown>[]).map(p => ({
-    id:    p.user_id as string,
-    name:  (p.name as string) || (p.email as string) || "Unknown",
-    email: (p.email as string) || "",
-  }));
+  return rowsToUsers(data ?? []);
 }
 
 export async function getManagedAdmins(supabase: SupabaseClient, adminId: string): Promise<ManagedUser[]> {
@@ -42,9 +46,23 @@ export async function getManagedAdmins(supabase: SupabaseClient, adminId: string
     .from("profiles").select("*")
     .eq("admin_id", rootAdminId)
     .eq("role", "admin");
-  return ((data ?? []) as Record<string, unknown>[]).map(p => ({
-    id:    p.user_id as string,
-    name:  (p.name as string) || (p.email as string) || "Unknown",
-    email: (p.email as string) || "",
-  }));
+  return rowsToUsers(data ?? []);
+}
+
+// Resolves root admin ID once then fetches workers and co-admins in parallel.
+// Use this on startup instead of calling getManagedUsers + getManagedAdmins
+// separately, which would call resolveRootAdminId twice.
+export async function getManagedTeam(
+  supabase: SupabaseClient,
+  adminId: string,
+): Promise<{ users: ManagedUser[]; admins: ManagedUser[] }> {
+  const rootAdminId = await resolveRootAdminId(supabase, adminId);
+  const [usersRes, adminsRes] = await Promise.all([
+    supabase.from("profiles").select("*").eq("admin_id", rootAdminId).eq("role", "user"),
+    supabase.from("profiles").select("*").eq("admin_id", rootAdminId).eq("role", "admin"),
+  ]);
+  return {
+    users:  rowsToUsers(usersRes.data  ?? []),
+    admins: rowsToUsers(adminsRes.data ?? []),
+  };
 }

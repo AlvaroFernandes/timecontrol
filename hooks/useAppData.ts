@@ -11,7 +11,7 @@ import { calcHours, processEntries } from "@/lib/calculations";
 import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, getAdminEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getSettings, getWorkerSettings, saveSettings as saveSettingsSvc, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
-import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins } from "@/services/profiles";
+import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
 import { getInvoices, saveInvoice, deleteInvoice } from "@/services/invoices";
 
 export function useAppData() {
@@ -67,19 +67,20 @@ export function useAppData() {
       setUserRole(role);
 
       if (role === "admin") {
-        const users = await getManagedUsers(supabase, user.id);
-        setManagedUsers(users);
-
-        const workerIds = users.map(u => u.id);
-        const [fetchedEntries, settingsRow, fetchedWorkerSettings, admins] = await Promise.all([
-          getAdminEntries(supabase, workerIds),
+        const [team, settingsRow] = await Promise.all([
+          getManagedTeam(supabase, user.id),
           getSettings(supabase, user.id),
+        ]);
+        setManagedUsers(team.users);
+        setManagedAdmins(team.admins);
+
+        const workerIds = team.users.map(u => u.id);
+        const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
+          getAdminEntries(supabase, workerIds),
           getWorkerSettings(supabase, workerIds),
-          getManagedAdmins(supabase, user.id),
         ]);
         setEntries(fetchedEntries);
         setWorkerSettings(fetchedWorkerSettings);
-        setManagedAdmins(admins);
         if (settingsRow) {
           setSettings(settingsRow.settings);
           if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);

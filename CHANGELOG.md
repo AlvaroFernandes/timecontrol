@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.16] - 2026-05-16
+
+### Performance
+- `hooks/useAppData.ts` admin init — replaced two sequential calls (`getManagedUsers` then `getManagedAdmins`, each triggering a separate `resolveRootAdminId` round-trip) with a single `getManagedTeam` call; `getManagedTeam` resolves the root admin ID once and fetches workers and co-admins in parallel. `getSettings` runs concurrently in the same batch, cutting admin startup from 3 sequential round-trips to 2.
+
+---
+
 ## [0.5.15] - 2026-05-16
 
 ### Fixed
