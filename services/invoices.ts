@@ -16,7 +16,7 @@ export function fromInvoiceRow(row: Record<string, unknown>): SavedInvoice {
 export async function getInvoices(supabase: SupabaseClient, userId: string): Promise<SavedInvoice[]> {
   const { data } = await supabase
     .from("invoices").select("*").eq("user_id", userId)
-    .order("invoice_num", { ascending: false });
+    .order("invoice_num", { ascending: false }).limit(50);
   return ((data ?? []) as Record<string, unknown>[]).map(fromInvoiceRow);
 }
 

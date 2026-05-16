@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.19] - 2026-05-16
+
+### Performance
+- `services/invoices.ts` — `getInvoices` now applies `.limit(50)` so the query returns at most the 50 most recent invoices (sorted by `invoice_num` descending); previously the query was unbounded and would return every invoice ever saved
+
+---
+
 ## [0.5.18] - 2026-05-16
 
 ### Performance
