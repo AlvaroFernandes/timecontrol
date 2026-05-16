@@ -118,6 +118,7 @@
 .icon-btn-sm{background:none;border:0.5px solid var(--color-border-tertiary);border-radius:6px;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:3px 7px;line-height:1;transition:background 0.1s}
 .icon-btn-sm:hover{background:var(--color-background-secondary);color:var(--color-text-primary)}
 .icon-btn-sm.danger:hover{background:var(--color-background-danger);color:var(--color-text-danger)}
+.icon-btn-sm:disabled{opacity:0.45;cursor:not-allowed;pointer-events:none}
 .print-actions{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .report-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:10px}
 .report-label{font-size:18px;font-weight:500;letter-spacing:-.2px}

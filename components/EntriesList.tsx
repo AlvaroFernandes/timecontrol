@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { ManagedUser, ProcessedEntry } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Bdg } from "./ui";
@@ -6,12 +6,19 @@ import { Bdg } from "./ui";
 export const EntriesList = React.memo(function EntriesList({ processed, onEdit, onDelete, isAdmin, users, userFilter, onUserFilterChange }: {
   processed: ProcessedEntry[];
   onEdit: (e: ProcessedEntry) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
   isAdmin?: boolean;
   users?: ManagedUser[];
   userFilter?: string;
   onUserFilterChange?: (v: string) => void;
 }) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteClick = async (id: string) => {
+    setDeletingId(id);
+    try { await onDelete(id); } finally { setDeletingId(null); }
+  };
+
   const visible = isAdmin && userFilter && userFilter !== "all"
     ? processed.filter(e => e.ownerId === userFilter)
     : processed;
@@ -87,8 +94,13 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
                       <button className="icon-btn-sm" onClick={() => onEdit(e)} aria-label="Edit">
                         <i className="ti ti-edit" aria-hidden="true" />
                       </button>
-                      <button className="icon-btn-sm danger" onClick={() => onDelete(e.id)} aria-label="Delete">
-                        <i className="ti ti-trash" aria-hidden="true" />
+                      <button
+                        className="icon-btn-sm danger"
+                        onClick={() => handleDeleteClick(e.id)}
+                        disabled={deletingId === e.id}
+                        aria-label={deletingId === e.id ? "Deleting…" : "Delete"}
+                      >
+                        <i className={`ti ${deletingId === e.id ? "ti-loader-2" : "ti-trash"}`} aria-hidden="true" />
                       </button>
                     </span>
                   </td>

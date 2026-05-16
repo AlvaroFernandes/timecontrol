@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.23] - 2026-05-16
+
+### Fixed
+- `components/EntriesList.tsx` — delete button now disables itself and swaps to a loader icon (`ti-loader-2`) while the async delete is in-flight, preventing double-clicks; button restores on completion or error via `try/finally`
+- `app/globals.css` — added `.icon-btn-sm:disabled` rule (`opacity: 0.45; cursor: not-allowed; pointer-events: none`)
+
+---
+
 ## [0.5.22] - 2026-05-16
 
 ### Changed
