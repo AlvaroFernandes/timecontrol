@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { ManagedUser, ProcessedEntry, Settings, Totals } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Metric, Bdg } from "./ui";
@@ -7,21 +7,26 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
   totals: Totals; tfnPct: number; settings: Settings; processed: ProcessedEntry[];
   isAdmin?: boolean; users?: ManagedUser[];
 }) {
-  const byDate: Record<string, ProcessedEntry[]> = {};
-  processed.forEach(e => { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); });
-  const dates = Object.keys(byDate).sort().reverse().slice(0, 10);
+  const { byDate, dates } = useMemo(() => {
+    const byDate: Record<string, ProcessedEntry[]> = {};
+    processed.forEach(e => { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); });
+    return { byDate, dates: Object.keys(byDate).sort().reverse().slice(0, 10) };
+  }, [processed]);
 
-  if (isAdmin && users) {
-    const userStats = users.map(u => {
+  const userStats = useMemo(() => {
+    if (!isAdmin || !users) return [];
+    return users.map(u => {
       const ue = processed.filter(e => e.ownerId === u.id);
       return {
         ...u,
-        entries: ue.length,
-        hours:   ue.reduce((a, e) => a + e.total, 0),
+        entries:  ue.length,
+        hours:    ue.reduce((a, e) => a + e.total, 0),
         earnings: ue.reduce((a, e) => a + e.totalEarnings, 0),
       };
     }).sort((a, b) => b.hours - a.hours);
+  }, [processed, users, isAdmin]);
 
+  if (isAdmin && users) {
     return (
       <div>
         <h2 className="sr-only">Admin dashboard</h2>

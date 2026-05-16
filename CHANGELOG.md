@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.21] - 2026-05-16
+
+### Performance
+- `components/Dashboard.tsx` — `byDate`/`dates` grouping and `userStats` aggregation are now wrapped in `useMemo` keyed on `[processed]` (and `[processed, users, isAdmin]` for the admin table); previously both loops re-ran on every render even when `settings` or `totals` changed but `processed` had not. `userStats` was also hoisted above the early-return branch to comply with the Rules of Hooks.
+
+---
+
 ## [0.5.20] - 2026-05-16
 
 ### Performance
