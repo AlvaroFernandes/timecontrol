@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.6] - 2026-05-16
+
+### Security
+- `genId()` in `lib/formatters.ts` now uses `crypto.randomUUID()` instead of `Date.now().toString(36) + Math.random()` — UUIDs are cryptographically random and unguessable, whereas the old scheme was predictable from wall-clock time
+- Added HTTP security headers in `next.config.ts` applied to all routes: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera, microphone, geolocation off)
+
+---
+
 ## [0.5.5] - 2026-05-16
 
 ### Performance
