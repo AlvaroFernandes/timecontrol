@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type {
@@ -15,8 +15,9 @@ import { ensureProfile, getProfile, getManagedUsers } from "@/services/profiles"
 import { getInvoices, saveInvoice, deleteInvoice } from "@/services/invoices";
 
 export function useAppData() {
-  const supabase = createClient();
-  const router   = useRouter();
+  const supabaseRef = useRef(createClient());
+  const supabase    = supabaseRef.current;
+  const router      = useRouter();
 
   const [tab,             setTab]             = useState("dashboard");
   const [entries,         setEntries]         = useState<Entry[]>([]);
@@ -184,7 +185,7 @@ export function useAppData() {
 
   const handleAdminSave = (updated: Entry) => {
     setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-    if (userId) saveEntry(updated, userId);
+    if (userId) saveEntry(updated, updated.ownerId ?? userId);
     setAdminEditEntry(null);
     showToast("Entry updated");
   };
@@ -202,30 +203,36 @@ export function useAppData() {
   };
 
   // ── Derived values ─────────────────────────────────────────────────────────
+  // Memoised so processEntries (sort + multi-pass accumulation) only re-runs
+  // when entries or the relevant settings actually change, not on every form
+  // keystroke or editId update.
 
-  const allPeriodEntries = entries.filter(e =>
-    (!periodStart || e.date >= periodStart) &&
-    (!periodEnd   || e.date <= periodEnd)
-  );
-  const periodEntries  = allPeriodEntries.filter(e => !e.archived);
-  const tfnRateParsed  = parseFloat(settings.tfnRate || "") || undefined;
-  const processed      = processEntries(periodEntries,    settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
-  const allProcessed   = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
-  // Weekly report: all entries visible, but active entries use current-period TFN/ABN budget
-  const processedById  = new Map(processed.map(e => [e.id, e]));
-  const weeklyData     = allProcessed.map(e => processedById.get(e.id) ?? e);
-  const totals         = processed.reduce<Totals>((a, e) => ({
-    hours:       a.hours       + e.total,
-    tfnHours:    a.tfnHours    + e.tfnPortion,
-    abnHours:    a.abnHours    + e.abnPortion,
-    otHours:     a.otHours     + e.overtime,
-    tfnEarnings: a.tfnEarnings + e.tfnEarnings,
-    abnEarnings: a.abnEarnings + e.abnEarnings,
-    total:       a.total       + e.totalEarnings,
-  }), { hours: 0, tfnHours: 0, abnHours: 0, otHours: 0, tfnEarnings: 0, abnEarnings: 0, total: 0 });
-  const tfnPct = Math.min(100, (totals.tfnHours / (settings.tfnLimit || 30)) * 100);
+  const { allPeriodEntries, processed, weeklyData, totals, tfnPct } = useMemo(() => {
+    const allPeriodEntries = entries.filter(e =>
+      (!periodStart || e.date >= periodStart) &&
+      (!periodEnd   || e.date <= periodEnd)
+    );
+    const periodEntries = allPeriodEntries.filter(e => !e.archived);
+    const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
+    const processed     = processEntries(periodEntries,    settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+    const allProcessed  = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+    // Weekly report: all entries visible, but active entries use current-period TFN/ABN budget
+    const processedById = new Map(processed.map(e => [e.id, e]));
+    const weeklyData    = allProcessed.map(e => processedById.get(e.id) ?? e);
+    const totals        = processed.reduce<Totals>((a, e) => ({
+      hours:       a.hours       + e.total,
+      tfnHours:    a.tfnHours    + e.tfnPortion,
+      abnHours:    a.abnHours    + e.abnPortion,
+      otHours:     a.otHours     + e.overtime,
+      tfnEarnings: a.tfnEarnings + e.tfnEarnings,
+      abnEarnings: a.abnEarnings + e.abnEarnings,
+      total:       a.total       + e.totalEarnings,
+    }), { hours: 0, tfnHours: 0, abnHours: 0, otHours: 0, tfnEarnings: 0, abnEarnings: 0, total: 0 });
+    const tfnPct = Math.min(100, (totals.tfnHours / (settings.tfnLimit || 30)) * 100);
+    return { allPeriodEntries, processed, weeklyData, totals, tfnPct };
+  }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold]);
 
-  const TABS = userRole === "admin"
+  const TABS = useMemo(() => userRole === "admin"
     ? [
         { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
         { id: "entries",   label: "Entries",       icon: "ti-list"             },
@@ -239,7 +246,8 @@ export function useAppData() {
         { id: "tfn",       label: "TFN Report",   icon: "ti-report"           },
         { id: "abn",       label: "ABN Invoice",  icon: "ti-receipt"          },
         { id: "history",   label: "Invoices",     icon: "ti-history"          },
-      ];
+      ],
+  [userRole]);
 
   // ── Invoice advance ────────────────────────────────────────────────────────
 

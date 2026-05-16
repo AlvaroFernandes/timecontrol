@@ -6,6 +6,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.5] - 2026-05-16
+
+### Performance
+- Derived values (`processed`, `weeklyData`, `totals`, `tfnPct`, `allPeriodEntries`) in `hooks/useAppData.ts` are now wrapped in `useMemo` keyed on `[entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold]` — `processEntries` no longer re-runs on every form keystroke or `editId` change
+- `TABS` array is now memoised on `[userRole]` — the tab definition object is stable across renders
+- Supabase client moved from a bare `createClient()` call (re-executed on every render) to `useRef(createClient())` — the client is now created once per mount
+
+---
+
+## [0.5.4] - 2026-05-16
+
+### Security
+- `upsertEntry` in `services/entries.ts` now always writes to the explicitly passed `userId` — previously it fell back to `entry.ownerId`, allowing the call site to silently route writes to any user's row
+- `handleAdminSave` in `hooks/useAppData.ts` now explicitly passes `updated.ownerId` as the target user ID when saving an admin-edited entry, making the intent clear at the call site rather than relying on a hidden fallback in the service layer
+
+---
+
 ## [0.5.3] - 2026-05-16
 
 ### Security

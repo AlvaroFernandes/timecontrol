@@ -47,7 +47,7 @@ export async function getAdminEntries(supabase: SupabaseClient, userIds: string[
 }
 
 export async function upsertEntry(supabase: SupabaseClient, entry: Entry, userId: string): Promise<boolean> {
-  const { error } = await supabase.from("entries").upsert(entryToRow(entry, entry.ownerId ?? userId));
+  const { error } = await supabase.from("entries").upsert(entryToRow(entry, userId));
   return !error;
 }
 
