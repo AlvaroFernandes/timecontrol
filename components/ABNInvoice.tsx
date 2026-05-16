@@ -11,6 +11,7 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
   const [newDesc,     setNewDesc]     = useState("");
   const [newAmt,      setNewAmt]      = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [addError,    setAddError]    = useState<string | null>(null);
 
   const abnEntries = processed.filter(e => e.abnPortion > 0);
   const extraItems = settings.invoiceItems || [];
@@ -31,8 +32,11 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
   });
 
   const addItem = () => {
+    if (!newDate)        { setAddError("Date is required"); return; }
+    if (!newDesc.trim()) { setAddError("Description is required"); return; }
     const amt = parseFloat(newAmt);
-    if (!newDate || !newDesc.trim() || !amt) return;
+    if (isNaN(amt) || amt <= 0) { setAddError("Amount must be a positive number"); return; }
+    setAddError(null);
     onItemsChange([...extraItems, { id: genId(), date: newDate, description: newDesc.trim(), amount: amt }]);
     setNewDesc(""); setNewAmt("");
   };
@@ -96,22 +100,28 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
               <div className="field" style={{ width: 150 }}>
                 <label htmlFor="ei-date">Date</label>
-                <input id="ei-date" type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
+                <input id="ei-date" type="date" value={newDate} onChange={e => { setNewDate(e.target.value); setAddError(null); }} />
               </div>
               <div className="field" style={{ flex: 1, minWidth: 180 }}>
                 <label htmlFor="ei-desc">Description</label>
                 <input id="ei-desc" type="text" placeholder="e.g. Parking, License4Work fee" value={newDesc}
-                  onChange={e => setNewDesc(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} />
+                  onChange={e => { setNewDesc(e.target.value); setAddError(null); }} onKeyDown={e => e.key === "Enter" && addItem()} />
               </div>
               <div className="field" style={{ width: 130 }}>
                 <label htmlFor="ei-amt">Amount (AUD)</label>
                 <input id="ei-amt" type="number" min="0" step="0.01" placeholder="0.00" value={newAmt}
-                  onChange={e => setNewAmt(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} />
+                  onChange={e => { setNewAmt(e.target.value); setAddError(null); }} onKeyDown={e => e.key === "Enter" && addItem()} />
               </div>
               <button className="btn-primary" onClick={addItem} style={{ marginBottom: 1 }}>
                 <i className="ti ti-plus" aria-hidden="true" /> Add
               </button>
             </div>
+            {addError && (
+              <p style={{ color: "var(--color-text-danger)", fontSize: 12, marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                <i className="ti ti-alert-circle" aria-hidden="true" />
+                {addError}
+              </p>
+            )}
           </div>
 
           <div id="abn-invoice-doc" className="invoice-doc">

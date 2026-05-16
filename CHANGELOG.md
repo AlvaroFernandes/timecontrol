@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.24] - 2026-05-16
+
+### Fixed
+- `components/ABNInvoice.tsx` — `addItem()` now shows a specific inline error message (with `ti-alert-circle` icon) when a field is invalid instead of silently doing nothing; errors clear automatically when the user edits any field
+- `addItem()` validation bug fixed: negative amounts previously passed the `!amt` check; replaced with `isNaN(amt) || amt <= 0`
+
+---
+
 ## [0.5.23] - 2026-05-16
 
 ### Fixed
