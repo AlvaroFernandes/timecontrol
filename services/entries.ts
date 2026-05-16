@@ -32,7 +32,7 @@ export function entryToRow(entry: Entry, userId: string): Record<string, unknown
 export async function getEntries(supabase: SupabaseClient, userId: string): Promise<Entry[]> {
   const { data } = await supabase
     .from("entries").select("*")
-    .eq("user_id", userId)
+    .eq("user_id", userId).is("deleted_at", null)
     .order("date").order("start_time");
   return ((data ?? []) as Record<string, unknown>[]).map(rowToEntry);
 }
@@ -41,7 +41,7 @@ export async function getAdminEntries(supabase: SupabaseClient, userIds: string[
   if (userIds.length === 0) return [];
   const { data } = await supabase
     .from("entries").select("*")
-    .in("user_id", userIds)
+    .in("user_id", userIds).is("deleted_at", null)
     .order("date").order("start_time");
   return ((data ?? []) as Record<string, unknown>[]).map(rowToEntry);
 }
@@ -52,7 +52,8 @@ export async function upsertEntry(supabase: SupabaseClient, entry: Entry, userId
 }
 
 export async function deleteEntry(supabase: SupabaseClient, id: string): Promise<boolean> {
-  const { error } = await supabase.from("entries").delete().eq("id", id);
+  const { error } = await supabase
+    .from("entries").update({ deleted_at: new Date().toISOString() }).eq("id", id);
   return !error;
 }
 

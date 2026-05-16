@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.22] - 2026-05-16
+
+### Changed
+- `services/entries.ts` — `deleteEntry` now soft-deletes by setting `deleted_at = now()` instead of issuing a hard `DELETE`; `getEntries` and `getAdminEntries` filter `deleted_at IS NULL` so deleted rows are never returned to the UI
+- `supabase/migrations/010_entries_soft_delete.sql` — adds `deleted_at timestamptz` column; replaces the plain `entries_user_id_date_idx` from migration 009 with a partial index `entries_active_user_date_idx (user_id, date, start_time) WHERE deleted_at IS NULL`, which indexes only live rows
+
+---
+
 ## [0.5.21] - 2026-05-16
 
 ### Performance
