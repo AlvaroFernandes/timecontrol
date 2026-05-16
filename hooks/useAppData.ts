@@ -10,8 +10,8 @@ import type {
 import { calcHours, processEntries } from "@/lib/calculations";
 import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, getAdminEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
-import { DEFAULT_SETTINGS, getSettings, saveSettings as saveSettingsSvc } from "@/services/settings";
-import { ensureProfile, getProfile, getManagedUsers } from "@/services/profiles";
+import { DEFAULT_SETTINGS, getSettings, getWorkerSettings, saveSettings as saveSettingsSvc, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
+import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins } from "@/services/profiles";
 import { getInvoices, saveInvoice, deleteInvoice } from "@/services/invoices";
 
 export function useAppData() {
@@ -36,8 +36,10 @@ export function useAppData() {
   const [viewingInvoice,  setViewingInvoice]  = useState<SavedInvoice | null>(null);
   const [userRole,        setUserRole]        = useState<"user" | "admin">("user");
   const [managedUsers,    setManagedUsers]    = useState<ManagedUser[]>([]);
+  const [managedAdmins,   setManagedAdmins]   = useState<ManagedUser[]>([]);
   const [adminEditEntry,  setAdminEditEntry]  = useState<Entry | null>(null);
   const [adminUserFilter, setAdminUserFilter] = useState<string>("all");
+  const [workerSettings,  setWorkerSettings]  = useState<Record<string, Settings>>({});
 
   useEffect(() => {
     const saved = localStorage.getItem("wh_theme") as "light" | "dark" | null;
@@ -68,11 +70,16 @@ export function useAppData() {
         const users = await getManagedUsers(supabase, user.id);
         setManagedUsers(users);
 
-        const [fetchedEntries, settingsRow] = await Promise.all([
-          getAdminEntries(supabase, users.map(u => u.id)),
+        const workerIds = users.map(u => u.id);
+        const [fetchedEntries, settingsRow, fetchedWorkerSettings, admins] = await Promise.all([
+          getAdminEntries(supabase, workerIds),
           getSettings(supabase, user.id),
+          getWorkerSettings(supabase, workerIds),
+          getManagedAdmins(supabase, user.id),
         ]);
         setEntries(fetchedEntries);
+        setWorkerSettings(fetchedWorkerSettings);
+        setManagedAdmins(admins);
         if (settingsRow) {
           setSettings(settingsRow.settings);
           if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
@@ -202,6 +209,21 @@ export function useAppData() {
     showToast("Settings saved");
   };
 
+  const handleSaveWorkerRules = async (
+    rules: { userId: string; tfnLimit: number; overtimeThreshold: number }[],
+  ) => {
+    const results = await Promise.all(
+      rules.map(({ userId: wid, tfnLimit, overtimeThreshold }) => {
+        const existing = workerSettings[wid] ?? DEFAULT_SETTINGS;
+        const updated  = { ...existing, tfnLimit, overtimeThreshold };
+        setWorkerSettings(prev => ({ ...prev, [wid]: updated }));
+        return saveWorkerSettingsSvc(supabase, wid, updated);
+      })
+    );
+    if (results.some(ok => !ok)) showToast("Could not save some worker rules", "err");
+    else showToast("Worker rules saved");
+  };
+
   // ── Derived values ─────────────────────────────────────────────────────────
   // Memoised so processEntries (sort + multi-pass accumulation) only re-runs
   // when entries or the relevant settings actually change, not on every form
@@ -213,9 +235,32 @@ export function useAppData() {
       (!periodEnd   || e.date <= periodEnd)
     );
     const periodEntries = allPeriodEntries.filter(e => !e.archived);
-    const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
-    const processed     = processEntries(periodEntries,    settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
-    const allProcessed  = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+
+    let processed: ReturnType<typeof processEntries>;
+    let allProcessed: ReturnType<typeof processEntries>;
+
+    if (userRole === "admin") {
+      // Process each worker's entries independently so their own tfnLimit,
+      // tfnRate, and overtimeThreshold are respected rather than the admin's.
+      const workerIds = [...new Set(allPeriodEntries.map(e => e.ownerId).filter(Boolean))] as string[];
+      const procParts: ReturnType<typeof processEntries> = [];
+      const allProcParts: ReturnType<typeof processEntries> = [];
+      for (const uid of workerIds) {
+        const ws  = workerSettings[uid] ?? DEFAULT_SETTINGS;
+        const tfnRateParsed = parseFloat(ws.tfnRate || "") || undefined;
+        const ot  = ws.overtimeThreshold || 12;
+        const lim = ws.tfnLimit || 30;
+        procParts.push(   ...processEntries(periodEntries.filter(e => e.ownerId === uid),    lim, tfnRateParsed, ot));
+        allProcParts.push(...processEntries(allPeriodEntries.filter(e => e.ownerId === uid), lim, tfnRateParsed, ot));
+      }
+      processed   = procParts;
+      allProcessed = allProcParts;
+    } else {
+      const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
+      processed    = processEntries(periodEntries,    settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+      allProcessed = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+    }
+
     // Weekly report: all entries visible, but active entries use current-period TFN/ABN budget
     const processedById = new Map(processed.map(e => [e.id, e]));
     const weeklyData    = allProcessed.map(e => processedById.get(e.id) ?? e);
@@ -230,7 +275,7 @@ export function useAppData() {
     }), { hours: 0, tfnHours: 0, abnHours: 0, otHours: 0, tfnEarnings: 0, abnEarnings: 0, total: 0 });
     const tfnPct = Math.min(100, (totals.tfnHours / (settings.tfnLimit || 30)) * 100);
     return { allPeriodEntries, processed, weeklyData, totals, tfnPct };
-  }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold]);
+  }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, userRole, workerSettings]);
 
   const TABS = useMemo(() => userRole === "admin"
     ? [
@@ -248,6 +293,24 @@ export function useAppData() {
         { id: "history",   label: "Invoices",     icon: "ti-history"          },
       ],
   [userRole]);
+
+  const handleInvite = async (email: string, role: "user" | "admin") => {
+    const res = await fetch("/api/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, role }),
+    });
+    const json = await res.json();
+    if (!res.ok) { showToast(json.error ?? "Could not send invitation", "err"); return; }
+    showToast(`Invitation sent to ${email}`);
+    if (role === "admin") {
+      const admins = await getManagedAdmins(supabase, userId!);
+      setManagedAdmins(admins);
+    } else {
+      const users = await getManagedUsers(supabase, userId!);
+      setManagedUsers(users);
+    }
+  };
 
   // ── Invoice advance ────────────────────────────────────────────────────────
 
@@ -327,7 +390,8 @@ export function useAppData() {
     // handlers
     toggleTheme, signOut, updatePeriod,
     handleSave, handleEdit, handleAdminSave,
-    handleDelete, handleSettingsSave,
+    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
+    workerSettings, managedAdmins,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
     // inline settings update for ABN invoice items
     updateInvoiceItems: (items: Settings["invoiceItems"]) => {

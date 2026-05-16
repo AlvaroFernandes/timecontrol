@@ -1,12 +1,12 @@
 import React from "react";
-import type { ProcessedEntry, Settings } from "@/types";
+import type { ManagedUser, ProcessedEntry, Settings } from "@/types";
 import { fh, fc, fd, fdInv, downloadPdf } from "@/lib/formatters";
 import { Bdg } from "./ui";
 
 function weekStart(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // shift to Monday
+  const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
   return d.toISOString().split("T")[0];
 }
@@ -112,13 +112,27 @@ function WeekTimesheetDoc({ week, settings }: { week: WeekSummary; settings: Set
   );
 }
 
-export function WeeklyReport({ processed, settings, isAdmin }: { processed: ProcessedEntry[]; settings: Settings; isAdmin?: boolean }) {
-  const [expanded,     setExpanded]     = React.useState<Record<string, boolean>>({});
-  const [selectedWeek, setSelectedWeek] = React.useState<WeekSummary | null>(null);
-  const [downloading,  setDownloading]  = React.useState(false);
+interface Props {
+  processed: ProcessedEntry[];
+  settings: Settings;
+  isAdmin?: boolean;
+  users?: ManagedUser[];
+}
+
+export function WeeklyReport({ processed, settings, isAdmin, users }: Props) {
+  const [expanded,      setExpanded]      = React.useState<Record<string, boolean>>({});
+  const [selectedWeek,  setSelectedWeek]  = React.useState<WeekSummary | null>(null);
+  const [downloading,   setDownloading]   = React.useState(false);
+  const [workerFilter,  setWorkerFilter]  = React.useState("all");
+
+  const visible = React.useMemo(() =>
+    isAdmin && workerFilter !== "all"
+      ? processed.filter(e => e.ownerId === workerFilter)
+      : processed,
+  [processed, isAdmin, workerFilter]);
 
   const weekMap: Record<string, ProcessedEntry[]> = {};
-  processed.forEach(e => {
+  visible.forEach(e => {
     const ws = weekStart(e.date);
     if (!weekMap[ws]) weekMap[ws] = [];
     weekMap[ws].push(e);
@@ -153,12 +167,23 @@ export function WeeklyReport({ processed, settings, isAdmin }: { processed: Proc
     total:          a.total          + w.total,
   }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, tfnEarnings:0, abnEarnings:0, total:0 });
 
+  const userMap = React.useMemo(() =>
+    new Map((users ?? []).map(u => [u.id, u.name])),
+  [users]);
+
   if (weeks.length === 0) {
     return (
-      <div className="empty-state">
-        <i className="ti ti-calendar-week" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
-        <p>No entries in this period</p>
-      </div>
+      <>
+        {isAdmin && users && users.length > 0 && (
+          <div className="no-print" style={{ marginBottom: 16 }}>
+            <WorkerFilter users={users} value={workerFilter} onChange={setWorkerFilter} />
+          </div>
+        )}
+        <div className="empty-state">
+          <i className="ti ti-calendar-week" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
+          <p>No entries in this period</p>
+        </div>
+      </>
     );
   }
 
@@ -188,7 +213,11 @@ export function WeeklyReport({ processed, settings, isAdmin }: { processed: Proc
     <div id="weekly-report-doc">
       <h2 className="sr-only">Weekly report</h2>
 
-      <div className="print-actions no-print">
+      <div className="print-actions no-print" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        {isAdmin && users && users.length > 0
+          ? <WorkerFilter users={users} value={workerFilter} onChange={setWorkerFilter} />
+          : <span />
+        }
         <button className="btn-secondary" disabled={downloading} onClick={async () => {
           setDownloading(true);
           await downloadPdf("weekly-report-doc", "Weekly-Report.pdf");
@@ -210,10 +239,10 @@ export function WeeklyReport({ processed, settings, isAdmin }: { processed: Proc
               <th>Billed hrs</th>
               <th>Regular</th>
               <th>Overtime</th>
-              {!isAdmin && <th>TFN hrs</th>}
-              {!isAdmin && <th>ABN hrs</th>}
-              {!isAdmin && <th>TFN earnings</th>}
-              {!isAdmin && <th>ABN earnings</th>}
+              <th>TFN hrs</th>
+              <th>ABN hrs</th>
+              <th>TFN earnings</th>
+              <th>ABN earnings</th>
               <th>Total</th>
               <th></th>
             </tr>
@@ -228,10 +257,10 @@ export function WeeklyReport({ processed, settings, isAdmin }: { processed: Proc
                   <td className="mono">{fh(w.hours)}</td>
                   <td className="mono">{fh(w.regular)}</td>
                   <td className="mono">{w.overtime > 0 ? <Bdg type="ot">{fh(w.overtime)}</Bdg> : <span className="muted">—</span>}</td>
-                  {!isAdmin && <td className="mono">{w.tfnHours > 0 ? <Bdg type="tfn">{fh(w.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>}
-                  {!isAdmin && <td className="mono">{w.abnHours > 0 ? <Bdg type="abn">{fh(w.abnHours)}</Bdg> : <span className="muted">—</span>}</td>}
-                  {!isAdmin && <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>}
-                  {!isAdmin && <td className="mono" style={{ color: "var(--color-text-info)" }}>{fc(w.abnEarnings)}</td>}
+                  <td className="mono">{w.tfnHours > 0 ? <Bdg type="tfn">{fh(w.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
+                  <td className="mono">{w.abnHours > 0 ? <Bdg type="abn">{fh(w.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
+                  <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>
+                  <td className="mono" style={{ color: "var(--color-text-info)" }}>{fc(w.abnEarnings)}</td>
                   <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>
                   <td>
                     <span style={{ display: "flex", gap: 4 }}>
@@ -257,19 +286,24 @@ export function WeeklyReport({ processed, settings, isAdmin }: { processed: Proc
                       {fd(e.date)}
                       {e.archived && <span style={{ marginLeft: 6, fontSize: 10, background: "var(--color-background-tertiary)", color: "var(--color-text-tertiary)", padding: "1px 5px", borderRadius: 3 }}>invoiced</span>}
                     </td>
-                    <td colSpan={2} style={{ fontSize: 12, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td colSpan={isAdmin ? 1 : 2} style={{ fontSize: 12, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {e.jobDescription}
                     </td>
+                    {isAdmin && (
+                      <td style={{ fontSize: 11, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                        {userMap.get(e.ownerId ?? "") ?? "—"}
+                      </td>
+                    )}
                     <td className="mono" style={{ fontSize: 12 }}>
                       {e.startTime}–{e.endTime}
                       {e.breakMins > 0 && <span className="muted"> −{e.breakMins}m</span>}
                     </td>
                     <td className="mono" style={{ fontSize: 12 }}>{fh(e.regular)}</td>
                     <td>{e.overtime > 0 ? <Bdg type="ot">{fh(e.overtime)}</Bdg> : <span className="muted">—</span>}</td>
-                    {!isAdmin && <td>{e.tfnPortion > 0 ? <Bdg type="tfn">{fh(e.tfnPortion)}</Bdg> : <span className="muted">—</span>}</td>}
-                    {!isAdmin && <td>{e.abnPortion > 0 ? <Bdg type="abn">{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>}
-                    {!isAdmin && <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>}
-                    {!isAdmin && <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{fc(e.abnEarnings)}</td>}
+                    <td>{e.tfnPortion > 0 ? <Bdg type="tfn">{fh(e.tfnPortion)}</Bdg> : <span className="muted">—</span>}</td>
+                    <td>{e.abnPortion > 0 ? <Bdg type="abn">{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>
+                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>
+                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{fc(e.abnEarnings)}</td>
                     <td className="mono" style={{ fontSize: 12 }}>{fc(e.totalEarnings)}</td>
                     <td />
                   </tr>
@@ -280,21 +314,48 @@ export function WeeklyReport({ processed, settings, isAdmin }: { processed: Proc
           <tfoot>
             <tr style={{ borderTop: "1px solid var(--color-border-secondary)" }}>
               <td style={{ fontWeight: 500, fontSize: 12 }}>Total</td>
-              <td>{processed.length}</td>
+              <td>{visible.length}</td>
               <td className="mono muted">{grandTotal.breakMinsTotal > 0 ? `${grandTotal.breakMinsTotal}m` : "—"}</td>
               <td className="mono" style={{ fontWeight: 500 }}>{fh(grandTotal.hours)}</td>
               <td className="mono">{fh(grandTotal.regular)}</td>
               <td className="mono">{grandTotal.overtime > 0 ? <Bdg type="ot">{fh(grandTotal.overtime)}</Bdg> : <span className="muted">—</span>}</td>
-              {!isAdmin && <td className="mono">{grandTotal.tfnHours > 0 ? <Bdg type="tfn">{fh(grandTotal.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>}
-              {!isAdmin && <td className="mono">{grandTotal.abnHours > 0 ? <Bdg type="abn">{fh(grandTotal.abnHours)}</Bdg> : <span className="muted">—</span>}</td>}
-              {!isAdmin && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>}
-              {!isAdmin && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>}
+              <td className="mono">{grandTotal.tfnHours > 0 ? <Bdg type="tfn">{fh(grandTotal.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
+              <td className="mono">{grandTotal.abnHours > 0 ? <Bdg type="abn">{fh(grandTotal.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
+              <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>
+              <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>
               <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>
               <td />
             </tr>
           </tfoot>
         </table>
       </div>
+    </div>
+  );
+}
+
+function WorkerFilter({ users, value, onChange }: { users: ManagedUser[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <i className="ti ti-user" style={{ fontSize: 14, color: "var(--color-text-secondary)" }} aria-hidden="true" />
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          fontSize: 13,
+          padding: "4px 8px",
+          border: "0.5px solid var(--color-border-secondary)",
+          borderRadius: "var(--border-radius-sm)",
+          background: "var(--color-background-secondary)",
+          color: "var(--color-text-primary)",
+          cursor: "pointer",
+        }}
+        aria-label="Filter by worker"
+      >
+        <option value="all">All workers</option>
+        {users.map(u => (
+          <option key={u.id} value={u.id}>{u.name || u.email}</option>
+        ))}
+      </select>
     </div>
   );
 }

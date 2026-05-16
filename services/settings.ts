@@ -29,6 +29,35 @@ export async function getSettings(supabase: SupabaseClient, userId: string): Pro
   };
 }
 
+export async function getWorkerSettings(
+  supabase: SupabaseClient,
+  userIds: string[],
+): Promise<Record<string, Settings>> {
+  if (userIds.length === 0) return {};
+  const { data } = await supabase
+    .from("settings").select("user_id, data")
+    .in("user_id", userIds);
+  if (!data) return {};
+  return Object.fromEntries(
+    (data as { user_id: string; data: Settings }[]).map(row => [
+      row.user_id,
+      { ...DEFAULT_SETTINGS, ...(row.data ?? {}) },
+    ])
+  );
+}
+
+export async function saveWorkerSettings(
+  supabase: SupabaseClient,
+  workerId: string,
+  settings: Settings,
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("settings")
+    .update({ data: settings })
+    .eq("user_id", workerId);
+  return !error;
+}
+
 export async function saveSettings(
   supabase: SupabaseClient,
   userId: string,

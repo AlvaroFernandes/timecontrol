@@ -1,15 +1,33 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
 export default function LoginPage() {
   const supabase = createClient();
+  const router   = useRouter();
+
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [error,    setError]    = useState("");
+  const [loading,  setLoading]  = useState(false);
 
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/` },
     });
+  };
+
+  const signInWithEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) { setError(error.message); return; }
+    router.push("/");
   };
 
   return (
@@ -65,6 +83,75 @@ export default function LoginPage() {
           </svg>
           Continue with Google
         </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}>
+          <div style={{ flex: 1, height: 1, background: "var(--color-border-tertiary)" }} />
+          <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>or</span>
+          <div style={{ flex: 1, height: 1, background: "var(--color-border-tertiary)" }} />
+        </div>
+
+        <form onSubmit={signInWithEmail} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            style={{
+              width: "100%",
+              padding: "9px 12px",
+              fontSize: 14,
+              background: "var(--color-background-secondary)",
+              border: "0.5px solid var(--color-border-secondary)",
+              borderRadius: "var(--border-radius-md)",
+              color: "var(--color-text-primary)",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            style={{
+              width: "100%",
+              padding: "9px 12px",
+              fontSize: 14,
+              background: "var(--color-background-secondary)",
+              border: "0.5px solid var(--color-border-secondary)",
+              borderRadius: "var(--border-radius-md)",
+              color: "var(--color-text-primary)",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          {error && (
+            <p style={{ fontSize: 12, color: "var(--color-text-danger)", margin: 0, textAlign: "left" }}>
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "10px 16px",
+              background: "var(--color-text-warning)",
+              border: "none",
+              borderRadius: "var(--border-radius-md)",
+              color: "#fff",
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.7 : 1,
+              transition: "opacity 0.15s",
+            }}
+          >
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
       </div>
     </div>
   );

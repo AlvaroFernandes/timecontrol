@@ -31,7 +31,8 @@ export default function WorkHoursTracker() {
     processed, weeklyData, totals, tfnPct, TABS,
     toggleTheme, signOut, updatePeriod,
     handleSave, handleEdit, handleAdminSave,
-    handleDelete, handleSettingsSave,
+    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
+    workerSettings, managedAdmins,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
     updateInvoiceItems,
   } = useAppData();
@@ -97,7 +98,7 @@ export default function WorkHoursTracker() {
             userFilter={adminUserFilter} onUserFilterChange={setAdminUserFilter} />
         )}
         {tab === "weekly" && (
-          <WeeklyReport processed={weeklyData} settings={settings} isAdmin={userRole === "admin"} />
+          <WeeklyReport processed={weeklyData} settings={settings} isAdmin={userRole === "admin"} users={managedUsers} />
         )}
         {tab === "tfn" && userRole !== "admin" && (
           <TFNReport processed={processed} totals={totals} settings={settings}
@@ -114,7 +115,15 @@ export default function WorkHoursTracker() {
             onDelete={handleDeleteInvoice} />
         )}
         {tab === "settings" && (
-          <SettingsPage settings={settings} onSave={handleSettingsSave} />
+          <SettingsPage
+            settings={settings} onSave={handleSettingsSave}
+            isAdmin={userRole === "admin"}
+            managedUsers={managedUsers}
+            managedAdmins={managedAdmins}
+            workerSettings={workerSettings}
+            onSaveWorkerRules={handleSaveWorkerRules}
+            onInvite={handleInvite}
+          />
         )}
       </main>
 
