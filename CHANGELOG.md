@@ -6,6 +6,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.10] - 2026-05-16
+
+### Fixed
+- `handleSave` in `hooks/useAppData.ts` — DB write is now awaited before updating UI state and showing a success toast; silently-failed saves no longer mark an entry as saved on screen
+- `handleAdminSave` in `hooks/useAppData.ts` — same fix: the modal now stays open and shows an error toast if the DB upsert fails, instead of closing and toasting success unconditionally
+- `handleDelete` in `hooks/useAppData.ts` — entry is only removed from UI state after the DB delete confirms success; previously the list updated immediately and the error (if any) was invisible
+
+### Security
+- `supabase/migrations/007_profiles_managed_select.sql` — replaced the hardcoded `admin_id = auth.uid()` check on `profiles_managed_select` with `manages_user(user_id)`, so sub-admins can now read the profiles of workers they manage (the entries/settings policies already used `manages_user`; the profiles policy was the only one left behind)
+- `app/auth/confirm/route.ts` — closed open-redirect: the `?next=` query param is now validated to be a relative path before use; absolute URLs, protocol-relative URLs (`//attacker.com`), and `javascript:` URIs all fall back to `/`
+
+---
+
 ## [0.5.6] - 2026-05-16
 
 ### Security

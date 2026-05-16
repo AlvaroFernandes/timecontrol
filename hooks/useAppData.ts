@@ -124,9 +124,8 @@ export function useAppData() {
     setTimeout(() => setToast(null), 3200);
   };
 
-  const saveEntry = async (entry: Entry, uid: string) => {
-    const ok = await upsertEntry(supabase, entry, uid);
-    if (!ok) showToast("Could not save entry", "err");
+  const saveEntry = async (entry: Entry, uid: string): Promise<boolean> => {
+    return upsertEntry(supabase, entry, uid);
   };
 
   const removeEntry = async (id: string): Promise<boolean> => {
@@ -150,7 +149,7 @@ export function useAppData() {
     if (userId) saveSettings(settings, ps, pe, userId);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const { date, jobDescription, startTime, endTime, hourlyRate } = form;
     if (!date || !jobDescription.trim() || !startTime || !endTime || !hourlyRate) {
       showToast("All fields are required", "err"); return;
@@ -164,11 +163,14 @@ export function useAppData() {
       breakMins:  parseInt(form.breakMins || "0") || 0,
       id: editId || genId(),
     };
+    if (userId) {
+      const ok = await saveEntry(entry, userId);
+      if (!ok) { showToast("Could not save entry", "err"); return; }
+    }
     const newEntries = editId
       ? entries.map(e => e.id === editId ? entry : e)
       : [...entries, entry];
     setEntries(newEntries);
-    if (userId) saveEntry(entry, userId);
     showToast(editId ? "Entry updated" : "Entry added");
     setEditId(null);
     setForm({ date: form.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: settings.defaultRate || "", breakMins: "" });
@@ -189,9 +191,11 @@ export function useAppData() {
     }
   };
 
-  const handleAdminSave = (updated: Entry) => {
+  const handleAdminSave = async (updated: Entry) => {
+    if (!userId) return;
+    const ok = await saveEntry(updated, updated.ownerId ?? userId);
+    if (!ok) { showToast("Could not save entry", "err"); return; }
     setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-    if (userId) saveEntry(updated, updated.ownerId ?? userId);
     setAdminEditEntry(null);
     showToast("Entry updated");
   };
