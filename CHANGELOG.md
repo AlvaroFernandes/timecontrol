@@ -6,6 +6,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.20] - 2026-05-16
+
+### Performance
+- `supabase/migrations/009_indexes.sql` — three composite indexes:
+  - `entries(user_id, date, start_time)` — covers both `getEntries` (single user) and `getAdminEntries` (IN list) which filter by `user_id` and sort by `date`/`start_time`
+  - `invoices(user_id, invoice_num DESC)` — covers `getInvoices` filter + descending sort in one index scan
+  - `profiles(admin_id, role)` — covers `getManagedTeam`, `getManagedUsers`, and `getManagedAdmins` which filter `admin_id = X AND role = 'user'|'admin'`
+
+---
+
 ## [0.5.19] - 2026-05-16
 
 ### Performance
