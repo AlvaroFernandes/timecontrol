@@ -35,7 +35,7 @@ export default function WorkHoursTracker() {
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,
-    advanceInvoice, handleDeleteInvoice, handleCancelEdit,
+    advanceInvoice, handleDeleteInvoice, handleShareInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding, handleCompleteOnboarding,
@@ -158,7 +158,7 @@ export default function WorkHoursTracker() {
         {tab === "history" && userRole !== "admin" && (
           <InvoiceHistory invoices={invoiceHistory} viewing={viewingInvoice}
             onView={setViewingInvoice} pdfNamePattern={settings.pdfNamePattern}
-            onDelete={handleDeleteInvoice} />
+            onDelete={handleDeleteInvoice} onShare={handleShareInvoice} />
         )}
         {tab === "activity" && userRole === "admin" && (
           <ActivityLog entries={auditLog} />

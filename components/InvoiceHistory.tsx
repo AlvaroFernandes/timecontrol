@@ -1,97 +1,15 @@
 import React, { useState } from "react";
-import type { SavedInvoice, Settings, InvLineRow } from "@/types";
+import type { SavedInvoice, Settings } from "@/types";
 import { fdInv, buildPdfFilename, downloadPdf } from "@/lib/formatters";
 import { DEFAULT_SETTINGS } from "@/services/settings";
+import { SavedInvoiceDoc } from "./SavedInvoiceDoc";
 
-function SavedInvoiceDoc({ inv }: { inv: SavedInvoice }) {
-  const s = { ...DEFAULT_SETTINGS, ...inv.data.settings } as Settings;
-  const rows = inv.data.rows || [];
-  const subtotal     = inv.subtotal;
-  const gst          = s.gstRegistered ? subtotal * 0.1 : 0;
-  const invoiceTotal = subtotal + gst;
-
-  return (
-    <div id="saved-invoice-doc" className="invoice-doc">
-      <div className="inv-header">
-        <div className="inv-from">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{s.yourName || "Your Name"}</div>
-          {s.abn         && <div>ABN: {s.abn}</div>}
-          {s.yourAddress && <div>{s.yourAddress}</div>}
-          {s.yourPhone   && <div>Phone: {s.yourPhone}</div>}
-          {s.yourEmail   && <div>Email: {s.yourEmail}</div>}
-        </div>
-        <div className="inv-title-col">
-          <h1 className="inv-title">TAX INVOICE #{inv.invoiceNum}</h1>
-          <div style={{ marginTop: 14, lineHeight: 1.55 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>Invoice to: {s.companyName || "Company Name"}</div>
-            {s.companyAbn   && <div>ABN: {s.companyAbn}</div>}
-            {s.companyEmail && <div>Email: {s.companyEmail}</div>}
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <strong>Issue date: </strong>{fdInv(inv.issueDate)}
-          </div>
-        </div>
-      </div>
-
-      <table className="inv-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Description</th>
-            <th style={{ textAlign: "right" }}>Rate</th>
-            <th style={{ textAlign: "right" }}>Hours</th>
-            <th style={{ textAlign: "right" }}>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row: InvLineRow) => (
-            <tr key={row.key}>
-              <td style={{ whiteSpace: "nowrap" }}>{fdInv(row.date)}</td>
-              <td>
-                {row.description}
-                {row.client && <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{row.client}</div>}
-              </td>
-              <td style={{ textAlign: "right", whiteSpace: "nowrap", color: row.rate === null ? "#999" : undefined }}>{row.rate !== null ? `$ ${row.rate.toFixed(2)}` : "—"}</td>
-              <td style={{ textAlign: "right", color: row.hours === null ? "#999" : undefined }}>{row.hours !== null ? row.hours.toFixed(2) : "—"}</td>
-              <td style={{ textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>$ {row.amount.toFixed(2)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="inv-bottom">
-        <div className="inv-box">
-          <div className="inv-box-title">Payment details</div>
-          <div className="inv-box-content">
-            {s.bankName      && <div>{s.bankName}</div>}
-            {s.bsb           && <div>BSB: {s.bsb}</div>}
-            {s.accountNumber && <div>Account: {s.accountNumber}</div>}
-            {!s.bankName && !s.bsb && !s.accountNumber && <span style={{ color: "#999", fontSize: 12 }}>—</span>}
-          </div>
-        </div>
-        <div className="inv-box">
-          <div className="inv-totals-line"><span>Subtotal</span><span>$ {subtotal.toFixed(2)}</span></div>
-          <div className="inv-totals-line">
-            <span>{s.gstRegistered ? "GST (10%)" : "GST (N/A)"}</span>
-            <span>$ {gst.toFixed(2)}</span>
-          </div>
-          <div className="inv-totals-line total"><span>Total</span><span>$ {invoiceTotal.toFixed(2)}</span></div>
-        </div>
-      </div>
-
-      <div className="inv-notes-box">
-        <div className="inv-box-title">Additional notes</div>
-        <div className="inv-box-content">{s.invoiceNotes || "-"}</div>
-      </div>
-    </div>
-  );
-}
-
-export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, viewing, onView, onDelete, pdfNamePattern }: {
+export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, viewing, onView, onDelete, onShare, pdfNamePattern }: {
   invoices: SavedInvoice[];
   viewing: SavedInvoice | null;
   onView: (inv: SavedInvoice | null) => void;
   onDelete: (id: string) => void;
+  onShare: (id: string) => void;
   pdfNamePattern: string;
 }) {
   const [downloading, setDownloading] = useState(false);
@@ -116,6 +34,9 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
           }}>
             <i className="ti ti-download" aria-hidden="true" />
             {downloading ? "Generating…" : "Download PDF"}
+          </button>
+          <button className="btn-secondary" onClick={() => onShare(viewing.id)}>
+            <i className="ti ti-link" aria-hidden="true" /> Copy share link
           </button>
         </div>
         <SavedInvoiceDoc inv={viewing} />
@@ -162,6 +83,10 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
                   <span style={{ display: "flex", gap: 4 }}>
                     <button className="icon-btn-sm" onClick={() => onView(inv)} aria-label="View invoice">
                       <i className="ti ti-eye" aria-hidden="true" />
+                    </button>
+                    <button className="icon-btn-sm" onClick={() => onShare(inv.id)} aria-label="Copy share link"
+                      title={inv.shareToken ? "Copy share link" : "Generate & copy share link"}>
+                      <i className={`ti ${inv.shareToken ? "ti-link" : "ti-share"}`} aria-hidden="true" />
                     </button>
                     <button className="icon-btn-sm danger" onClick={() => onDelete(inv.id)} aria-label="Delete">
                       <i className="ti ti-trash" aria-hidden="true" />

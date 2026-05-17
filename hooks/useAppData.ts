@@ -12,7 +12,7 @@ import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, getAdminEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getSettings, getWorkerSettings, saveSettings as saveSettingsSvc, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
 import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
-import { getInvoices, saveInvoice, deleteInvoice } from "@/services/invoices";
+import { getInvoices, saveInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
 import { logActivity, getAuditLog } from "@/services/audit";
 
 export function useAppData() {
@@ -532,6 +532,25 @@ export function useAppData() {
   }, [form, settings, userId, periodStart, periodEnd]); // showToast/saveSettings/setSettings are stable
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleShareInvoice = useCallback(async (id: string) => {
+    const existing = invoiceHistory.find(i => i.id === id);
+    let token = existing?.shareToken;
+    if (!token) {
+      const t = await generateShareToken(supabase, id);
+      if (!t) { showToast("Could not generate share link", "err"); return; }
+      token = t;
+      setInvoiceHistory(prev => prev.map(i => i.id === id ? { ...i, shareToken: token } : i));
+    }
+    const url = `${window.location.origin}/invoice/${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Share link copied!");
+    } catch {
+      showToast(`Share link: ${url}`);
+    }
+  }, [invoiceHistory]); // supabase/showToast/setters stable
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleDeleteInvoice = useCallback(async (id: string) => {
     const ok = await deleteInvoice(supabase, id);
     if (!ok) { showToast("Could not delete invoice", "err"); return; }
@@ -569,7 +588,7 @@ export function useAppData() {
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,
-    advanceInvoice, handleDeleteInvoice, handleCancelEdit,
+    advanceInvoice, handleDeleteInvoice, handleShareInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding: !loading && userRole === "user" && !settings.onboardingCompleted && !settings.yourName,

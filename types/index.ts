@@ -134,6 +134,7 @@ export interface SavedInvoice {
   companyName: string;
   subtotal: number;
   createdAt: string;
+  shareToken?: string;
   data: {
     settings: Partial<Settings>;
     rows: InvLineRow[];

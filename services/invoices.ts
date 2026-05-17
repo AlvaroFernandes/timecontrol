@@ -9,6 +9,7 @@ export function fromInvoiceRow(row: Record<string, unknown>): SavedInvoice {
     companyName: (row.company_name as string) || "",
     subtotal:    Number(row.subtotal),
     createdAt:   row.created_at as string,
+    shareToken:  (row.share_token as string) || undefined,
     data:        row.data as SavedInvoice["data"],
   };
 }
@@ -58,4 +59,18 @@ export async function saveInvoice(
 export async function deleteInvoice(supabase: SupabaseClient, id: string): Promise<boolean> {
   const { error } = await supabase.from("invoices").delete().eq("id", id);
   return !error;
+}
+
+export async function generateShareToken(supabase: SupabaseClient, invoiceId: string): Promise<string | null> {
+  const token = crypto.randomUUID();
+  const { error } = await supabase.from("invoices").update({ share_token: token }).eq("id", invoiceId);
+  if (error) return null;
+  return token;
+}
+
+export async function getInvoiceByToken(supabase: SupabaseClient, token: string): Promise<SavedInvoice | null> {
+  const { data } = await supabase
+    .from("invoices").select("*").eq("share_token", token).maybeSingle();
+  if (!data) return null;
+  return fromInvoiceRow(data as Record<string, unknown>);
 }
