@@ -11,12 +11,21 @@ export function calcHours(start: string, end: string): number {
   return +(mins / 60).toFixed(6);
 }
 
+// Monday-anchored ISO week start (noon avoids DST ambiguity)
+export function weekStart(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  const dow = d.getDay(); // 0 = Sun
+  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * Processes entries into billable buckets.
  *
  * Two independent splits per entry:
  *   OVERTIME – hours beyond `overtimeThreshold` in a single entry → rate ×1.5
- *   TFN/ABN  – first `tfnLimit` cumulative hours → TFN salary; excess → ABN invoice
+ *   TFN/ABN  – first `tfnLimit` hours per Mon–Sun week → TFN salary; excess → ABN invoice
+ *              The TFN counter resets every Monday.
  *
  * The intersection produces four buckets per entry: rTFN, otTFN, rABN, otABN.
  */
@@ -31,16 +40,20 @@ export function processEntries(
     return d !== 0 ? d : a.startTime.localeCompare(b.startTime);
   });
 
-  let periodRun = 0;
+  let weekRun     = 0;
+  let currentWeek = "";
 
   return sorted.map(entry => {
+    const ew = weekStart(entry.date);
+    if (ew !== currentWeek) { weekRun = 0; currentWeek = ew; }
+
     const worked   = calcHours(entry.startTime, entry.endTime) - (entry.breakMins || 0) / 60;
     const total    = Math.max(MIN_HOURS, worked);
 
     const regular  = Math.min(total, overtimeThreshold);
     const overtime = total - regular;
 
-    const tfnPortion = Math.max(0, Math.min(tfnLimit, periodRun + total) - periodRun);
+    const tfnPortion = Math.max(0, Math.min(tfnLimit, weekRun + total) - weekRun);
     const abnPortion = total - tfnPortion;
 
     const rTFN  = Math.max(0, Math.min(regular, tfnPortion));
@@ -53,7 +66,7 @@ export function processEntries(
     const tfnEarnings = rTFN * tR  + otTFN * tR  * 1.5;
     const abnEarnings = rABN * abnR + otABN * abnR * 1.5;
 
-    periodRun += total;
+    weekRun += total;
 
     return {
       ...entry,

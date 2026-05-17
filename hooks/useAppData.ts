@@ -7,7 +7,7 @@ import type {
   AuditEntry, Entry, EntryTemplate, ManagedUser, ProcessedEntry, Settings, Totals,
   FormState, Toast, InvLineRow, SavedInvoice, UserRole,
 } from "@/types";
-import { calcHours, processEntries } from "@/lib/calculations";
+import { calcHours, processEntries, weekStart } from "@/lib/calculations";
 import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, getAdminEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getSettings, getWorkerSettings, saveSettings as saveSettingsSvc, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
@@ -355,7 +355,19 @@ export function useAppData() {
       abnEarnings: a.abnEarnings + e.abnEarnings,
       total:       a.total       + e.totalEarnings,
     }), { hours: 0, tfnHours: 0, abnHours: 0, otHours: 0, tfnEarnings: 0, abnEarnings: 0, total: 0 });
-    const tfnPct = Math.min(100, (totals.tfnHours / (settings.tfnLimit || 30)) * 100);
+    // tfnPct: current week's TFN progress (period-independent, for the dashboard meter)
+    let tfnPct = 0;
+    if (userRole === "user") {
+      const today   = todayStr();
+      const mon     = weekStart(today);
+      const tfnRateW = parseFloat(settings.tfnRate || "") || undefined;
+      const weekProc = processEntries(
+        entries.filter(e => !e.archived && e.date >= mon && e.date <= today),
+        settings.tfnLimit, tfnRateW, settings.overtimeThreshold || 12,
+      );
+      const weekTfn = weekProc.reduce((s, e) => s + e.tfnPortion, 0);
+      tfnPct = Math.min(100, (weekTfn / (settings.tfnLimit || 30)) * 100);
+    }
     return { allPeriodEntries, processed, weeklyData, totals, tfnPct };
   }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, userRole, workerSettings]);
 
