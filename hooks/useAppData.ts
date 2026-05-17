@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type {
   Entry, EntryTemplate, ManagedUser, ProcessedEntry, Settings, Totals,
-  FormState, Toast, InvLineRow, SavedInvoice,
+  FormState, Toast, InvLineRow, SavedInvoice, UserRole,
 } from "@/types";
 import { calcHours, processEntries } from "@/lib/calculations";
 import { todayStr, genId } from "@/lib/formatters";
@@ -34,9 +34,10 @@ export function useAppData() {
   const [loading,         setLoading]         = useState(true);
   const [invoiceHistory,  setInvoiceHistory]  = useState<SavedInvoice[]>([]);
   const [viewingInvoice,  setViewingInvoice]  = useState<SavedInvoice | null>(null);
-  const [userRole,        setUserRole]        = useState<"user" | "admin">("user");
+  const [userRole,        setUserRole]        = useState<UserRole>("user");
   const [managedUsers,    setManagedUsers]    = useState<ManagedUser[]>([]);
   const [managedAdmins,   setManagedAdmins]   = useState<ManagedUser[]>([]);
+  const [managedViewers,  setManagedViewers]  = useState<ManagedUser[]>([]);
   const [adminEditEntry,  setAdminEditEntry]  = useState<Entry | null>(null);
   const [adminUserFilter, setAdminUserFilter] = useState<string>("all");
   const [workerSettings,     setWorkerSettings]     = useState<Record<string, Settings>>({});
@@ -64,7 +65,7 @@ export function useAppData() {
 
       await ensureProfile(supabase, user.id, user.email);
 
-      const { role } = await getProfile(supabase, user.id);
+      const { role, adminId } = await getProfile(supabase, user.id);
       setUserRole(role);
 
       if (role === "admin") {
@@ -74,6 +75,27 @@ export function useAppData() {
         ]);
         setManagedUsers(team.users);
         setManagedAdmins(team.admins);
+        setManagedViewers(team.viewers);
+
+        const workerIds = team.users.map(u => u.id);
+        const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
+          getAdminEntries(supabase, workerIds),
+          getWorkerSettings(supabase, workerIds),
+        ]);
+        setEntries(fetchedEntries);
+        setWorkerSettings(fetchedWorkerSettings);
+        if (settingsRow) {
+          setSettings(settingsRow.settings);
+          if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
+          if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
+        }
+      } else if (role === "viewer") {
+        if (!adminId) { setLoading(false); return; }
+        const [team, settingsRow] = await Promise.all([
+          getManagedTeam(supabase, adminId),
+          getSettings(supabase, user.id),
+        ]);
+        setManagedUsers(team.users);
 
         const workerIds = team.users.map(u => u.id);
         const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
@@ -305,7 +327,7 @@ export function useAppData() {
     return { allPeriodEntries, processed, weeklyData, totals, tfnPct };
   }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, userRole, workerSettings]);
 
-  const TABS = useMemo(() => userRole === "admin"
+  const TABS = useMemo(() => userRole === "admin" || userRole === "viewer"
     ? [
         { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
         { id: "entries",   label: "Entries",       icon: "ti-list"             },
@@ -327,7 +349,7 @@ export function useAppData() {
   [entries]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handleInvite = useCallback(async (email: string, role: "user" | "admin") => {
+  const handleInvite = useCallback(async (email: string, role: "user" | "admin" | "viewer") => {
     const res = await fetch("/api/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -339,6 +361,11 @@ export function useAppData() {
     if (role === "admin") {
       const admins = await getManagedAdmins(supabase, userId!);
       setManagedAdmins(admins);
+    } else if (role === "viewer") {
+      const viewers = await supabase.from("profiles").select("*").eq("admin_id", userId!).eq("role", "viewer");
+      setManagedViewers((viewers.data ?? []).map((p: Record<string, unknown>) => ({
+        id: p.user_id as string, name: (p.name as string) || (p.email as string) || "Unknown", email: (p.email as string) || "",
+      })));
     } else {
       const users = await getManagedUsers(supabase, userId!);
       setManagedUsers(users);
@@ -405,7 +432,7 @@ export function useAppData() {
   }, [settings, userId, periodStart, periodEnd]); // saveSettings/setSettings are stable
 
   const { showReminder, reminderDaysSince } = useMemo(() => {
-    if (userRole === "admin" || settings.reminderEnabled === false || loading) {
+    if (userRole === "admin" || userRole === "viewer" || settings.reminderEnabled === false || loading) {
       return { showReminder: false, reminderDaysSince: 0 };
     }
     const threshold = settings.reminderDays ?? 2;
@@ -479,6 +506,7 @@ export function useAppData() {
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding: !loading && userRole === "user" && !settings.onboardingCompleted && !settings.yourName,
+    managedViewers,
     handleCompleteOnboarding,
   };
 }

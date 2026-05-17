@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ManagedUser } from "@/types";
+import type { ManagedUser, UserRole } from "@/types";
 
 export async function ensureProfile(supabase: SupabaseClient, userId: string, email: string | undefined): Promise<void> {
   await supabase.from("profiles").upsert(
@@ -8,11 +8,15 @@ export async function ensureProfile(supabase: SupabaseClient, userId: string, em
   );
 }
 
-export async function getProfile(supabase: SupabaseClient, userId: string): Promise<{ role: "user" | "admin" }> {
+export async function getProfile(supabase: SupabaseClient, userId: string): Promise<{ role: UserRole; adminId: string | null }> {
   const { data } = await supabase
     .from("profiles").select("*").eq("user_id", userId).maybeSingle();
-  const role: "user" | "admin" = (data as Record<string, unknown> | null)?.role as "user" | "admin" ?? "user";
-  return { role };
+  const p = data as Record<string, unknown> | null;
+  const raw = (p?.role as string) ?? "user";
+  const role: UserRole = (["user", "admin", "viewer"] as const).includes(raw as UserRole)
+    ? (raw as UserRole)
+    : "user";
+  return { role, adminId: (p?.admin_id as string) ?? null };
 }
 
 async function resolveRootAdminId(supabase: SupabaseClient, adminId: string): Promise<string> {
@@ -49,20 +53,20 @@ export async function getManagedAdmins(supabase: SupabaseClient, adminId: string
   return rowsToUsers(data ?? []);
 }
 
-// Resolves root admin ID once then fetches workers and co-admins in parallel.
-// Use this on startup instead of calling getManagedUsers + getManagedAdmins
-// separately, which would call resolveRootAdminId twice.
+// Resolves root admin ID once then fetches workers, co-admins, and viewers in parallel.
 export async function getManagedTeam(
   supabase: SupabaseClient,
   adminId: string,
-): Promise<{ users: ManagedUser[]; admins: ManagedUser[] }> {
+): Promise<{ users: ManagedUser[]; admins: ManagedUser[]; viewers: ManagedUser[] }> {
   const rootAdminId = await resolveRootAdminId(supabase, adminId);
-  const [usersRes, adminsRes] = await Promise.all([
+  const [usersRes, adminsRes, viewersRes] = await Promise.all([
     supabase.from("profiles").select("*").eq("admin_id", rootAdminId).eq("role", "user"),
     supabase.from("profiles").select("*").eq("admin_id", rootAdminId).eq("role", "admin"),
+    supabase.from("profiles").select("*").eq("admin_id", rootAdminId).eq("role", "viewer"),
   ]);
   return {
-    users:  rowsToUsers(usersRes.data  ?? []),
-    admins: rowsToUsers(adminsRes.data ?? []),
+    users:   rowsToUsers(usersRes.data   ?? []),
+    admins:  rowsToUsers(adminsRes.data  ?? []),
+    viewers: rowsToUsers(viewersRes.data ?? []),
   };
 }

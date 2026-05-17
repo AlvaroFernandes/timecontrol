@@ -44,11 +44,12 @@ function downloadEntriesCSV(rows: ProcessedEntry[], users: ManagedUser[] | undef
   URL.revokeObjectURL(url);
 }
 
-export const EntriesList = React.memo(function EntriesList({ processed, onEdit, onDelete, isAdmin, users, userFilter, onUserFilterChange }: {
+export const EntriesList = React.memo(function EntriesList({ processed, onEdit, onDelete, isAdmin, isReadOnly, users, userFilter, onUserFilterChange }: {
   processed: ProcessedEntry[];
   onEdit: (e: ProcessedEntry) => void;
   onDelete: (id: string) => void | Promise<void>;
   isAdmin?: boolean;
+  isReadOnly?: boolean;
   users?: ManagedUser[];
   userFilter?: string;
   onUserFilterChange?: (v: string) => void;
@@ -150,7 +151,8 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
                 <th>Time</th>
                 <th>Hours</th><th>Rate</th>
                 {!isAdmin && <th>Split</th>}
-                <th>Earnings</th><th></th>
+                <th>Earnings</th>
+                {!isReadOnly && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -186,21 +188,23 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
                     </td>
                   )}
                   <td className="mono">{fc(e.totalEarnings)}</td>
-                  <td>
-                    <span style={{ display: "flex", gap: 4 }}>
-                      <button className="icon-btn-sm" onClick={() => onEdit(e)} aria-label="Edit">
-                        <i className="ti ti-edit" aria-hidden="true" />
-                      </button>
-                      <button
-                        className="icon-btn-sm danger"
-                        onClick={() => handleDeleteClick(e.id)}
-                        disabled={deletingId === e.id}
-                        aria-label={deletingId === e.id ? "Deleting…" : "Delete"}
-                      >
-                        <i className={`ti ${deletingId === e.id ? "ti-loader-2" : "ti-trash"}`} aria-hidden="true" />
-                      </button>
-                    </span>
-                  </td>
+                  {!isReadOnly && (
+                    <td>
+                      <span style={{ display: "flex", gap: 4 }}>
+                        <button className="icon-btn-sm" onClick={() => onEdit(e)} aria-label="Edit">
+                          <i className="ti ti-edit" aria-hidden="true" />
+                        </button>
+                        <button
+                          className="icon-btn-sm danger"
+                          onClick={() => handleDeleteClick(e.id)}
+                          disabled={deletingId === e.id}
+                          aria-label={deletingId === e.id ? "Deleting…" : "Delete"}
+                        >
+                          <i className={`ti ${deletingId === e.id ? "ti-loader-2" : "ti-trash"}`} aria-hidden="true" />
+                        </button>
+                      </span>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

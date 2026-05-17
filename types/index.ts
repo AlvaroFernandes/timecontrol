@@ -17,6 +17,8 @@ export interface ManagedUser {
   email: string;
 }
 
+export type UserRole = "user" | "admin" | "viewer";
+
 export interface ProcessedEntry extends Entry {
   total: number;
   regular: number;

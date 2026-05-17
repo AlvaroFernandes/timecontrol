@@ -7,8 +7,8 @@ export async function POST(request: NextRequest) {
   const email = body.email?.trim().toLowerCase();
   const role  = body.role;
 
-  if (!email || !["user", "admin"].includes(role ?? "")) {
-    return NextResponse.json({ error: "email and role (user|admin) are required" }, { status: 400 });
+  if (!email || !["user", "admin", "viewer"].includes(role ?? "")) {
+    return NextResponse.json({ error: "email and role (user|admin|viewer) are required" }, { status: 400 });
   }
 
   // Verify the caller is an authenticated admin

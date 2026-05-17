@@ -15,16 +15,17 @@ interface Props {
   isAdmin?: boolean;
   managedUsers?: ManagedUser[];
   managedAdmins?: ManagedUser[];
+  managedViewers?: ManagedUser[];
   workerSettings?: Record<string, Settings>;
   onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; overtimeThreshold: number }[]) => void;
-  onInvite?: (email: string, role: "user" | "admin") => void;
+  onInvite?: (email: string, role: "user" | "admin" | "viewer") => void;
 }
 
-export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedAdmins, workerSettings, onSaveWorkerRules, onInvite }: Props) {
+export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedAdmins, managedViewers, workerSettings, onSaveWorkerRules, onInvite }: Props) {
   const [s, setS] = useState<Settings>({ ...DEFAULT_SETTINGS, ...settings });
   const [workerRules,    setWorkerRules]    = useState<WorkerRule[]>([]);
   const [inviteEmail,    setInviteEmail]    = useState("");
-  const [inviteRole,     setInviteRole]     = useState<"user" | "admin">("user");
+  const [inviteRole,     setInviteRole]     = useState<"user" | "admin" | "viewer">("user");
   const [inviteSending,  setInviteSending]  = useState(false);
 
   const defaultTab = isAdmin ? "rules" : "personal";
@@ -303,7 +304,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                 style={{ flex: 1, minWidth: 200 }}
               />
               <select
-                value={inviteRole} onChange={e => setInviteRole(e.target.value as "user" | "admin")}
+                value={inviteRole} onChange={e => setInviteRole(e.target.value as "user" | "admin" | "viewer")}
                 style={{
                   padding: "7px 10px", fontSize: 13,
                   border: "0.5px solid var(--color-border-secondary)",
@@ -314,6 +315,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
               >
                 <option value="user">Worker</option>
                 <option value="admin">Admin</option>
+                <option value="viewer">Viewer (accountant)</option>
               </select>
               <button type="submit" className="btn-primary" disabled={inviteSending}>
                 <i className="ti ti-send" aria-hidden="true" />
@@ -355,7 +357,24 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
               </>
             )}
 
-            {(managedUsers ?? []).length === 0 && (managedAdmins ?? []).length === 0 && (
+            {(managedViewers ?? []).length > 0 && (
+              <>
+                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8, marginTop: 20 }}>Viewers (accountants)</p>
+                <table className="data-table">
+                  <thead><tr><th>Name</th><th>Email</th></tr></thead>
+                  <tbody>
+                    {(managedViewers ?? []).map(v => (
+                      <tr key={v.id}>
+                        <td style={{ fontWeight: 500 }}>{v.name}</td>
+                        <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{v.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+
+            {(managedUsers ?? []).length === 0 && (managedAdmins ?? []).length === 0 && (managedViewers ?? []).length === 0 && (
               <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>No team members yet. Send your first invitation above.</p>
             )}
           </>

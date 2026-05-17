@@ -38,6 +38,7 @@ export default function WorkHoursTracker() {
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding, handleCompleteOnboarding,
+    managedViewers,
   } = useAppData();
 
   if (loading) {
@@ -59,6 +60,11 @@ export default function WorkHoursTracker() {
               ADMIN
             </span>
           )}
+          {userRole === "viewer" && (
+            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "var(--color-text-info)", color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: "0.04em" }}>
+              VIEWER
+            </span>
+          )}
         </div>
         <div className="period-row">
           <span>Period:</span>
@@ -74,9 +80,11 @@ export default function WorkHoursTracker() {
         <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
           <i className={`ti ${theme === "dark" ? "ti-sun" : "ti-moon"}`} aria-hidden="true" />
         </button>
-        <button className="icon-btn" onClick={() => setTab("settings")} aria-label="Open settings">
-          <i className="ti ti-settings" aria-hidden="true" />
-        </button>
+        {userRole !== "viewer" && (
+          <button className="icon-btn" onClick={() => setTab("settings")} aria-label="Open settings">
+            <i className="ti ti-settings" aria-hidden="true" />
+          </button>
+        )}
         <button className="icon-btn" onClick={signOut} aria-label="Sign out">
           <i className="ti ti-logout" aria-hidden="true" />
         </button>
@@ -130,7 +138,8 @@ export default function WorkHoursTracker() {
         )}
         {tab === "entries" && (
           <EntriesList processed={processed} onEdit={handleEdit} onDelete={handleDelete}
-            isAdmin={userRole === "admin"} users={managedUsers}
+            isAdmin={userRole === "admin" || userRole === "viewer"} users={managedUsers}
+            isReadOnly={userRole === "viewer"}
             userFilter={adminUserFilter} onUserFilterChange={setAdminUserFilter} />
         )}
         {tab === "weekly" && (
@@ -150,12 +159,13 @@ export default function WorkHoursTracker() {
             onView={setViewingInvoice} pdfNamePattern={settings.pdfNamePattern}
             onDelete={handleDeleteInvoice} />
         )}
-        {tab === "settings" && (
+        {tab === "settings" && userRole !== "viewer" && (
           <SettingsPage
             settings={settings} onSave={handleSettingsSave}
             isAdmin={userRole === "admin"}
             managedUsers={managedUsers}
             managedAdmins={managedAdmins}
+            managedViewers={managedViewers}
             workerSettings={workerSettings}
             onSaveWorkerRules={handleSaveWorkerRules}
             onInvite={handleInvite}
