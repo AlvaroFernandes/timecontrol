@@ -75,6 +75,7 @@ export interface Settings {
   reminderEnabled?: boolean;
   reminderDays?: number;
   gstRegistered?: boolean;
+  onboardingCompleted?: boolean;
 }
 
 export interface Totals {

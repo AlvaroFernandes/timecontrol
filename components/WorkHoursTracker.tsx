@@ -9,8 +9,9 @@ import { WeeklyReport }   from "./WeeklyReport";
 import { TFNReport }      from "./TFNReport";
 import { ABNInvoice }     from "./ABNInvoice";
 import { InvoiceHistory } from "./InvoiceHistory";
-import { AdminEditModal } from "./AdminEditModal";
-import { SettingsPage }   from "./SettingsPage";
+import { AdminEditModal }    from "./AdminEditModal";
+import { SettingsPage }      from "./SettingsPage";
+import { OnboardingWizard }  from "./OnboardingWizard";
 
 export default function WorkHoursTracker() {
   const {
@@ -36,6 +37,7 @@ export default function WorkHoursTracker() {
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
+    showOnboarding, handleCompleteOnboarding,
   } = useAppData();
 
   if (loading) {
@@ -160,6 +162,14 @@ export default function WorkHoursTracker() {
           />
         )}
       </main>
+
+      {showOnboarding && (
+        <OnboardingWizard
+          initialSettings={settings}
+          onComplete={handleCompleteOnboarding}
+          onSkip={() => handleCompleteOnboarding({})}
+        />
+      )}
 
       {adminEditEntry && (
         <AdminEditModal

@@ -398,6 +398,12 @@ export function useAppData() {
 
   const dismissReminder = useCallback(() => setReminderDismissed(true), []);
 
+  const handleCompleteOnboarding = useCallback((partial: Partial<Settings>) => {
+    const s = { ...settings, ...partial, onboardingCompleted: true };
+    setSettings(s);
+    if (userId) saveSettings(s, periodStart, periodEnd, userId);
+  }, [settings, userId, periodStart, periodEnd]); // saveSettings/setSettings are stable
+
   const { showReminder, reminderDaysSince } = useMemo(() => {
     if (userRole === "admin" || settings.reminderEnabled === false || loading) {
       return { showReminder: false, reminderDaysSince: 0 };
@@ -472,5 +478,7 @@ export function useAppData() {
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
+    showOnboarding: !loading && userRole === "user" && !settings.onboardingCompleted && !settings.yourName,
+    handleCompleteOnboarding,
   };
 }

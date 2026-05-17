@@ -6,6 +6,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.32] - 2026-05-17
+
+### Added
+- **Worker self-onboarding wizard** — new workers see a 3-step setup modal on first login instead of landing on a blank dashboard
+  - Step 1 "Profile": name (required to advance), email, phone
+  - Step 2 "Work & Pay": default hourly rate, ABN
+  - Step 3 "Invoicing": bank name, BSB, account number
+  - Completed steps show a tick; "Skip for now" link available on every step
+  - Only shown to workers (`role = user`) who have no name set and haven't previously completed onboarding; existing users are unaffected
+  - `components/OnboardingWizard.tsx` — new self-contained wizard component
+  - `hooks/useAppData.ts` — `showOnboarding` flag + `handleCompleteOnboarding` (merges wizard fields into settings and sets `onboardingCompleted: true`)
+  - `types/index.ts` — `onboardingCompleted?: boolean` added to `Settings`
+
+---
+
 ## [0.5.31] - 2026-05-17
 
 ### Added
