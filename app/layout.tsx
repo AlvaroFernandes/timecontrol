@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SplitShift — Time & Earnings Tracker",
   description: "Track work hours, TFN salary, and ABN invoices",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "SplitShift",
+  },
+  formatDetection: { telephone: false },
+  other: { "mobile-web-app-capable": "yes" },
 };
 
 export default function RootLayout({

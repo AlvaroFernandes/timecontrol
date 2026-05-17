@@ -170,3 +170,53 @@
   .invoice-doc{border:none;border-radius:0;padding:0;max-width:100%;box-shadow:none}
   .inv-table th{background:#f8f8f8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* ── Mobile / PWA ── */
+@media (max-width: 600px) {
+  /* Header: stack period row on its own line */
+  .header{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}
+  .period-row{margin-left:0;width:100%;order:10;border-top:0.5px solid var(--color-border-tertiary);padding-top:8px}
+  .period-row input{min-width:0;flex:1}
+
+  /* Tabs: bigger touch targets */
+  .tab-btn{padding:12px 12px;font-size:12px;gap:4px}
+  .tab-btn .ti{font-size:16px}
+
+  /* Main content: tighter padding */
+  .main-content{padding:12px 10px}
+
+  /* Forms: single column */
+  .form-grid{grid-template-columns:1fr}
+  .field.full{grid-column:1}
+
+  /* Metric grid: 2 columns min on small */
+  .metric-grid{grid-template-columns:repeat(2,1fr)}
+
+  /* Toast: respect safe area at bottom */
+  .toast{bottom:calc(16px + env(safe-area-inset-bottom));right:12px;left:12px;max-width:none}
+
+  /* Modal: full-width on mobile */
+  .modal{width:calc(100vw - 24px);padding:18px}
+
+  /* Card padding */
+  .card{padding:12px}
+
+  /* Invoice doc: reduce padding */
+  .invoice-doc{padding:16px}
+  .inv-header{grid-template-columns:1fr;gap:16px}
+  .inv-title{text-align:left;font-size:20px}
+  .inv-bottom{grid-template-columns:1fr}
+
+  /* Buttons: full-width on very small screens */
+  .print-actions{flex-direction:column}
+  .print-actions .btn-secondary,
+  .print-actions .btn-primary{justify-content:center}
+}
+
+/* Safe-area padding for iOS notch / home indicator */
+.app{
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.header{
+  padding-top: env(safe-area-inset-top);
+}
