@@ -39,7 +39,8 @@ export function useAppData() {
   const [managedAdmins,   setManagedAdmins]   = useState<ManagedUser[]>([]);
   const [adminEditEntry,  setAdminEditEntry]  = useState<Entry | null>(null);
   const [adminUserFilter, setAdminUserFilter] = useState<string>("all");
-  const [workerSettings,  setWorkerSettings]  = useState<Record<string, Settings>>({});
+  const [workerSettings,     setWorkerSettings]     = useState<Record<string, Settings>>({});
+  const [reminderDismissed,  setReminderDismissed]  = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("wh_theme") as "light" | "dark" | null;
@@ -389,6 +390,25 @@ export function useAppData() {
     setForm({ date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" });
   }, []); // all stable setters
 
+  const dismissReminder = useCallback(() => setReminderDismissed(true), []);
+
+  const { showReminder, reminderDaysSince } = useMemo(() => {
+    if (userRole === "admin" || settings.reminderEnabled === false || loading) {
+      return { showReminder: false, reminderDaysSince: 0 };
+    }
+    const threshold = settings.reminderDays ?? 2;
+    const today     = todayStr();
+    const lastDate  = entries
+      .filter(e => !e.archived)
+      .map(e => e.date)
+      .sort()
+      .at(-1) ?? null;
+    const daysSince = lastDate
+      ? Math.floor((new Date(today).getTime() - new Date(lastDate).getTime()) / 86_400_000)
+      : Infinity;
+    return { showReminder: daysSince >= threshold, reminderDaysSince: isFinite(daysSince) ? daysSince : -1 };
+  }, [entries, settings.reminderEnabled, settings.reminderDays, userRole, loading]);
+
   const handleSaveTemplate = useCallback(() => {
     if (!form.jobDescription.trim()) { showToast("Add a job description first", "err"); return; }
     const template: EntryTemplate = {
@@ -445,5 +465,6 @@ export function useAppData() {
     workerSettings, managedAdmins, clients,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
+    showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
   };
 }

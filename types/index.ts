@@ -72,6 +72,8 @@ export interface Settings {
   overtimeThreshold: number;
   pdfNamePattern: string;
   templates?: EntryTemplate[];
+  reminderEnabled?: boolean;
+  reminderDays?: number;
 }
 
 export interface Totals {

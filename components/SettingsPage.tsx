@@ -124,6 +124,28 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
               </span>
             </div>
             <div className="field full" style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 16, marginTop: 4 }}>
+              <label>Logging reminder</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={s.reminderEnabled !== false}
+                    onChange={e => setS(prev => ({ ...prev, reminderEnabled: e.target.checked }))}
+                  />
+                  Remind me if I haven't logged hours in
+                </label>
+                <input
+                  type="number" min="1" max="30" step="1"
+                  value={s.reminderDays ?? 2}
+                  onChange={e => setS(prev => ({ ...prev, reminderDays: Math.max(1, parseInt(e.target.value) || 2) }))}
+                  disabled={s.reminderEnabled === false}
+                  style={{ width: 60 }}
+                  aria-label="Reminder threshold in days"
+                />
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>days</span>
+              </div>
+            </div>
+            <div className="field full" style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 16, marginTop: 4 }}>
               <label>Saved templates</label>
               {(s.templates ?? []).length === 0 ? (
                 <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", margin: 0 }}>

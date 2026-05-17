@@ -35,6 +35,7 @@ export default function WorkHoursTracker() {
     workerSettings, managedAdmins, clients,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
+    showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
   } = useAppData();
 
   if (loading) {
@@ -82,6 +83,32 @@ export default function WorkHoursTracker() {
           </button>
         ))}
       </nav>
+
+      {showReminder && !reminderDismissed && (
+        <div className="no-print" role="status" style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 16px",
+          background: "var(--color-background-secondary)",
+          borderLeft: "3px solid var(--color-text-warning)",
+          margin: "0 12px 0",
+          borderRadius: "var(--border-radius-md)",
+          fontSize: 13,
+        }}>
+          <i className="ti ti-bell-ringing" aria-hidden="true" style={{ color: "var(--color-text-warning)", fontSize: 16, flexShrink: 0 }} />
+          <span style={{ flex: 1, color: "var(--color-text-secondary)" }}>
+            {reminderDaysSince < 0
+              ? "You haven't logged any hours yet. Start tracking your time!"
+              : `You haven't logged hours in ${reminderDaysSince} day${reminderDaysSince !== 1 ? "s" : ""}. Don't forget to track your time!`}
+          </span>
+          <button className="btn-secondary" onClick={() => { dismissReminder(); setTab("log"); }}
+            style={{ fontSize: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
+            Log now
+          </button>
+          <button className="icon-btn-sm" onClick={dismissReminder} aria-label="Dismiss reminder">
+            <i className="ti ti-x" aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       <main className="main-content">
         {tab === "dashboard" && (

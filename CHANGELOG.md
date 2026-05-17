@@ -6,6 +6,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.28] - 2026-05-17
+
+### Added
+- **In-app logging reminder** — a dismissable banner appears between the tab bar and main content when the user hasn't logged hours for a configurable number of days; includes a "Log now" shortcut that navigates directly to the Log Entry tab
+  - `hooks/useAppData.ts` — `showReminder` / `reminderDaysSince` computed via `useMemo`; `dismissReminder` callback; `reminderDismissed` per-session state
+  - `components/WorkHoursTracker.tsx` — reminder banner rendered between nav and main content; only shown to non-admin users
+  - `components/SettingsPage.tsx` — "Logging reminder" control in the Personal tab: enable/disable toggle + configurable day threshold (default 2 days)
+  - `types/index.ts` — `reminderEnabled?: boolean` and `reminderDays?: number` added to `Settings`
+
+---
+
 ## [0.5.27] - 2026-05-17
 
 ### Fixed
