@@ -6,6 +6,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.33] - 2026-05-17
+
+### Added
+- **Entries CSV export** — "CSV" download button on the Entries tab exports the currently visible rows (respects user filter and client filter)
+  - Workers get: Date, Job Description, Client, Start, End, Break, Hours, Rate, TFN/ABN/OT hours, TFN/ABN/Total earnings
+  - Admin view adds a Worker column
+  - Button appears in the filter bar when filters are present, or as a standalone row above the table otherwise; disabled when no rows are visible
+  - Client-side only, no API required; filename includes today's date
+
+---
+
 ## [0.5.32] - 2026-05-17
 
 ### Added

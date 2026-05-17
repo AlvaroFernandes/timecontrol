@@ -3,6 +3,47 @@ import type { ManagedUser, ProcessedEntry } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Bdg } from "./ui";
 
+function csvEsc(v: string | number): string {
+  const s = String(v);
+  return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadEntriesCSV(rows: ProcessedEntry[], users: ManagedUser[] | undefined, isAdmin: boolean) {
+  const header = [
+    "Date", "Job Description", "Client",
+    ...(isAdmin ? ["Worker"] : []),
+    "Start", "End", "Break (min)", "Hours", "Rate (AUD/h)",
+    "TFN Hrs", "ABN Hrs", "OT Hrs",
+    "TFN Earnings", "ABN Earnings", "Total Earnings",
+  ].map(csvEsc).join(",");
+
+  const lines = rows.map(e => [
+    e.date,
+    e.jobDescription,
+    e.client ?? "",
+    ...(isAdmin ? [users?.find(u => u.id === e.ownerId)?.name ?? ""] : []),
+    e.startTime,
+    e.endTime,
+    e.breakMins,
+    e.total.toFixed(2),
+    e.hourlyRate.toFixed(2),
+    e.tfnPortion.toFixed(2),
+    e.abnPortion.toFixed(2),
+    e.overtime.toFixed(2),
+    e.tfnEarnings.toFixed(2),
+    e.abnEarnings.toFixed(2),
+    e.totalEarnings.toFixed(2),
+  ].map(csvEsc).join(","));
+
+  const blob = new Blob([[header, ...lines].join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `entries-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const EntriesList = React.memo(function EntriesList({ processed, onEdit, onDelete, isAdmin, users, userFilter, onUserFilterChange }: {
   processed: ProcessedEntry[];
   onEdit: (e: ProcessedEntry) => void;
@@ -69,6 +110,26 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
             </div>
           )}
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{visible.length} entries</span>
+          <button
+            className="btn-secondary"
+            style={{ fontSize: 12, padding: "4px 10px", marginLeft: "auto" }}
+            onClick={() => downloadEntriesCSV(visible, users, !!isAdmin)}
+            disabled={visible.length === 0}
+          >
+            <i className="ti ti-download" aria-hidden="true" /> CSV
+          </button>
+        </div>
+      )}
+
+      {!(isAdmin && users && users.length > 0 || hasClients) && visible.length > 0 && (
+        <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+          <button
+            className="btn-secondary"
+            style={{ fontSize: 12, padding: "4px 10px" }}
+            onClick={() => downloadEntriesCSV(visible, users, !!isAdmin)}
+          >
+            <i className="ti ti-download" aria-hidden="true" /> CSV
+          </button>
         </div>
       )}
 
