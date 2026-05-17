@@ -1,15 +1,8 @@
 import React from "react";
 import type { ManagedUser, ProcessedEntry, Settings } from "@/types";
 import { fh, fc, fd, fdInv, downloadPdf } from "@/lib/formatters";
+import { weekStart } from "@/lib/calculations";
 import { Bdg } from "./ui";
-
-function weekStart(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().split("T")[0];
-}
 
 function weekEnd(monStr: string): string {
   const d = new Date(monStr + "T12:00:00");
@@ -131,41 +124,45 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       : processed,
   [processed, isAdmin, workerFilter]);
 
-  const weekMap: Record<string, ProcessedEntry[]> = {};
-  visible.forEach(e => {
-    const ws = weekStart(e.date);
-    if (!weekMap[ws]) weekMap[ws] = [];
-    weekMap[ws].push(e);
-  });
+  const { weeks, grandTotal } = React.useMemo(() => {
+    const weekMap: Record<string, ProcessedEntry[]> = {};
+    visible.forEach(e => {
+      const ws = weekStart(e.date);
+      if (!weekMap[ws]) weekMap[ws] = [];
+      weekMap[ws].push(e);
+    });
 
-  const weeks: WeekSummary[] = Object.keys(weekMap).sort().map(ws => {
-    const entries = weekMap[ws];
-    return entries.reduce<WeekSummary>((a, e) => ({
-      weekStart:      ws,
-      entries,
-      hours:          a.hours         + e.total,
-      breakMinsTotal: a.breakMinsTotal + (e.breakMins || 0),
-      regular:        a.regular        + e.regular,
-      overtime:       a.overtime       + e.overtime,
-      tfnHours:       a.tfnHours       + e.tfnPortion,
-      abnHours:       a.abnHours       + e.abnPortion,
-      tfnEarnings:    a.tfnEarnings    + e.tfnEarnings,
-      abnEarnings:    a.abnEarnings    + e.abnEarnings,
-      total:          a.total          + e.totalEarnings,
-    }), { weekStart: ws, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, tfnEarnings:0, abnEarnings:0, total:0 });
-  });
+    const weeks: WeekSummary[] = Object.keys(weekMap).sort().map(ws => {
+      const entries = weekMap[ws];
+      return entries.reduce<WeekSummary>((a, e) => ({
+        weekStart:      ws,
+        entries,
+        hours:          a.hours         + e.total,
+        breakMinsTotal: a.breakMinsTotal + (e.breakMins || 0),
+        regular:        a.regular        + e.regular,
+        overtime:       a.overtime       + e.overtime,
+        tfnHours:       a.tfnHours       + e.tfnPortion,
+        abnHours:       a.abnHours       + e.abnPortion,
+        tfnEarnings:    a.tfnEarnings    + e.tfnEarnings,
+        abnEarnings:    a.abnEarnings    + e.abnEarnings,
+        total:          a.total          + e.totalEarnings,
+      }), { weekStart: ws, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, tfnEarnings:0, abnEarnings:0, total:0 });
+    });
 
-  const grandTotal = weeks.reduce<Omit<WeekSummary, "weekStart"|"entries">>((a, w) => ({
-    hours:          a.hours          + w.hours,
-    breakMinsTotal: a.breakMinsTotal + w.breakMinsTotal,
-    regular:        a.regular        + w.regular,
-    overtime:       a.overtime       + w.overtime,
-    tfnHours:       a.tfnHours       + w.tfnHours,
-    abnHours:       a.abnHours       + w.abnHours,
-    tfnEarnings:    a.tfnEarnings    + w.tfnEarnings,
-    abnEarnings:    a.abnEarnings    + w.abnEarnings,
-    total:          a.total          + w.total,
-  }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, tfnEarnings:0, abnEarnings:0, total:0 });
+    const grandTotal = weeks.reduce<Omit<WeekSummary, "weekStart"|"entries">>((a, w) => ({
+      hours:          a.hours          + w.hours,
+      breakMinsTotal: a.breakMinsTotal + w.breakMinsTotal,
+      regular:        a.regular        + w.regular,
+      overtime:       a.overtime       + w.overtime,
+      tfnHours:       a.tfnHours       + w.tfnHours,
+      abnHours:       a.abnHours       + w.abnHours,
+      tfnEarnings:    a.tfnEarnings    + w.tfnEarnings,
+      abnEarnings:    a.abnEarnings    + w.abnEarnings,
+      total:          a.total          + w.total,
+    }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, tfnEarnings:0, abnEarnings:0, total:0 });
+
+    return { weeks, grandTotal };
+  }, [visible]);
 
   const userMap = React.useMemo(() =>
     new Map((users ?? []).map(u => [u.id, u.name])),

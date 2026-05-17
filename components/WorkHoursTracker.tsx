@@ -19,8 +19,7 @@ export default function WorkHoursTracker() {
     tab, setTab,
     settings,
     periodStart, periodEnd,
-    form, setForm,
-    editId,
+    editEntry,
     toast,
     theme,
     loading,
@@ -133,7 +132,7 @@ export default function WorkHoursTracker() {
             periodStart={periodStart} periodEnd={periodEnd} />
         )}
         {tab === "log" && userRole !== "admin" && (
-          <LogEntry form={form} setForm={setForm} editId={editId}
+          <LogEntry key={editEntry?.id ?? "new"} editEntry={editEntry}
             onSave={handleSave} onCancel={handleCancelEdit} clients={clients}
             templates={settings.templates ?? []} onSaveTemplate={handleSaveTemplate} />
         )}

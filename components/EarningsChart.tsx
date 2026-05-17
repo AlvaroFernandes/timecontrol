@@ -1,12 +1,6 @@
 import React, { useMemo, useState } from "react";
 import type { ProcessedEntry } from "@/types";
-
-function weekStart(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  const day = d.getDay();
-  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-  return d.toISOString().slice(0, 10);
-}
+import { weekStart } from "@/lib/calculations";
 
 function barLabel(key: string, view: "week" | "month"): string {
   const d = new Date(key + "T00:00:00");

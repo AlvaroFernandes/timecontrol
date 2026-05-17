@@ -27,9 +27,6 @@ export function useAppData() {
   const [periodEnd,       setPeriodEnd]       = useState("");
   const [toast,           setToast]           = useState<Toast | null>(null);
   const [editId,          setEditId]          = useState<string | null>(null);
-  const [form,            setForm]            = useState<FormState>({
-    date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "",
-  });
   const [theme,           setTheme]           = useState<"light" | "dark">("light");
   const [userId,          setUserId]          = useState<string | null>(null);
   const [loading,         setLoading]         = useState(true);
@@ -49,6 +46,7 @@ export function useAppData() {
   const entriesRef      = useRef<Entry[]>([]);
   const managedUsersRef = useRef<ManagedUser[]>([]);
   const userIdRef       = useRef<string | null>(null);
+  const toastTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { entriesRef.current      = entries;      }, [entries]);
   useEffect(() => { managedUsersRef.current = managedUsers; }, [managedUsers]);
   useEffect(() => { userIdRef.current       = userId;       }, [userId]);
@@ -157,9 +155,11 @@ export function useAppData() {
 
   // setToast is a stable setter — no deps needed
   const showToast = useCallback((msg: string, type: "ok" | "err" = "ok") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3200);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3200);
   }, []);
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   // supabase is stable (useRef) — omitted from deps intentionally
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,28 +198,28 @@ export function useAppData() {
     if (userId) saveSettings(settings, "", "", userId);
   }, [userId, settings]); // saveSettings/setters are stable
 
-  const handleSave = useCallback(async () => {
-    const { date, jobDescription, startTime, endTime, hourlyRate } = form;
+  const handleSave = useCallback(async (formData: FormState): Promise<boolean> => {
+    const { date, jobDescription, startTime, endTime, hourlyRate } = formData;
     if (!date || !jobDescription.trim() || !startTime || !endTime || !hourlyRate) {
-      showToast("All fields are required", "err"); return;
+      showToast("All fields are required", "err"); return false;
     }
     const hourlyRateNum = parseFloat(hourlyRate);
     if (isNaN(hourlyRateNum) || hourlyRateNum < 0) {
-      showToast("Hourly rate must be a valid positive number", "err"); return;
+      showToast("Hourly rate must be a valid positive number", "err"); return false;
     }
-    const breakMinsNum = Math.max(0, parseInt(form.breakMins || "0") || 0);
+    const breakMinsNum = Math.max(0, parseInt(formData.breakMins || "0") || 0);
     if (calcHours(startTime, endTime) <= 0) {
-      showToast("End time must be after start time", "err"); return;
+      showToast("End time must be after start time", "err"); return false;
     }
     const entry: Entry = {
-      ...form,
+      ...formData,
       hourlyRate: hourlyRateNum,
       breakMins:  breakMinsNum,
       id: editId || genId(),
     };
     if (userId) {
       const ok = await saveEntry(entry, userId);
-      if (!ok) { showToast("Could not save entry", "err"); return; }
+      if (!ok) { showToast("Could not save entry", "err"); return false; }
     }
     const newEntries = editId
       ? entries.map(e => e.id === editId ? entry : e)
@@ -227,21 +227,14 @@ export function useAppData() {
     setEntries(newEntries);
     showToast(editId ? "Entry updated" : "Entry added");
     setEditId(null);
-    setForm({ date: form.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: settings.defaultRate || "", breakMins: "", client: "" });
-  }, [form, editId, userId, entries, settings.defaultRate]); // showToast/saveEntry/setters are stable
+    return true;
+  }, [editId, userId, entries]); // formData is a param; showToast/saveEntry/setters are stable
 
   const handleEdit = useCallback((entry: ProcessedEntry) => {
     if (userRole === "admin") {
       setAdminEditEntry(entry);
     } else {
       setEditId(entry.id);
-      setForm({
-        date: entry.date, jobDescription: entry.jobDescription,
-        startTime: entry.startTime, endTime: entry.endTime,
-        hourlyRate: String(entry.hourlyRate),
-        breakMins: entry.breakMins ? String(entry.breakMins) : "",
-        client: entry.client || "",
-      });
       setTab("log");
     }
   }, [userRole]); // setters are stable
@@ -371,6 +364,11 @@ export function useAppData() {
     return { allPeriodEntries, processed, weeklyData, totals, tfnPct };
   }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, userRole, workerSettings]);
 
+  const editEntry = useMemo(
+    () => (editId ? (entries.find(e => e.id === editId) ?? null) : null),
+    [editId, entries],
+  );
+
   const TABS = useMemo(() => {
     if (userRole === "admin") return [
       { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
@@ -487,7 +485,6 @@ export function useAppData() {
 
   const handleCancelEdit = useCallback(() => {
     setEditId(null);
-    setForm({ date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" });
   }, []); // all stable setters
 
   const dismissReminder = useCallback(() => setReminderDismissed(true), []);
@@ -515,21 +512,21 @@ export function useAppData() {
     return { showReminder: daysSince >= threshold, reminderDaysSince: isFinite(daysSince) ? daysSince : -1 };
   }, [entries, settings.reminderEnabled, settings.reminderDays, userRole, loading]);
 
-  const handleSaveTemplate = useCallback(() => {
-    if (!form.jobDescription.trim()) { showToast("Add a job description first", "err"); return; }
+  const handleSaveTemplate = useCallback((formData: FormState) => {
+    if (!formData.jobDescription.trim()) { showToast("Add a job description first", "err"); return; }
     const template: EntryTemplate = {
       id: genId(),
-      jobDescription: form.jobDescription.trim(),
-      ...(form.client.trim()  && { client:    form.client.trim()  }),
-      ...(form.hourlyRate     && { hourlyRate: form.hourlyRate     }),
-      ...(form.startTime      && { startTime:  form.startTime      }),
-      ...(form.endTime        && { endTime:    form.endTime        }),
+      jobDescription: formData.jobDescription.trim(),
+      ...(formData.client.trim()  && { client:    formData.client.trim()  }),
+      ...(formData.hourlyRate     && { hourlyRate: formData.hourlyRate     }),
+      ...(formData.startTime      && { startTime:  formData.startTime      }),
+      ...(formData.endTime        && { endTime:    formData.endTime        }),
     };
     const s = { ...settings, templates: [...(settings.templates ?? []), template] };
     setSettings(s);
     if (userId) saveSettings(s, periodStart, periodEnd, userId);
     showToast("Template saved");
-  }, [form, settings, userId, periodStart, periodEnd]); // showToast/saveSettings/setSettings are stable
+  }, [settings, userId, periodStart, periodEnd]); // formData is a param; showToast/saveSettings/setSettings are stable
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleShareInvoice = useCallback(async (id: string) => {
@@ -570,8 +567,7 @@ export function useAppData() {
     tab, setTab,
     settings, setSettings,
     periodStart, periodEnd,
-    form, setForm,
-    editId,
+    editEntry,
     toast,
     theme,
     loading,

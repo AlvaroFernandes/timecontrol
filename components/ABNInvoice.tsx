@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { ProcessedEntry, Settings, InvoiceItem, InvLineRow } from "@/types";
 import { fdInv, todayStr, genId, buildPdfFilename, downloadPdf } from "@/lib/formatters";
 import { weekStart } from "@/lib/calculations";
@@ -14,32 +14,32 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, 
   const [downloading, setDownloading] = useState(false);
   const [addError,    setAddError]    = useState<string | null>(null);
 
-  const extraItems  = settings.invoiceItems || [];
-  const allAbnEntries = processed.filter(e => e.abnPortion > 0);
+  const invNum = settings.invoiceNum || 1;
 
-  // Show only the oldest uninvoiced week
-  const allWeeks   = [...new Set(allAbnEntries.map(e => weekStart(e.date)))].sort();
-  const oldestWeek = allWeeks[0] ?? null;
-  const pendingWeeks = allWeeks.length - 1; // weeks after this one
+  const { extraItems, allAbnEntries, oldestWeek, pendingWeeks, abnEntries, allRows, subtotal, gst, invoiceTotal } = useMemo(() => {
+    const extraItems    = settings.invoiceItems ?? [];
+    const allAbnEntries = processed.filter(e => e.abnPortion > 0);
+    const allWeeks      = [...new Set(allAbnEntries.map(e => weekStart(e.date)))].sort();
+    const oldestWeek    = allWeeks[0] ?? null;
+    const pendingWeeks  = allWeeks.length - 1;
+    const abnEntries    = oldestWeek ? allAbnEntries.filter(e => weekStart(e.date) === oldestWeek) : [];
 
-  const abnEntries = oldestWeek
-    ? allAbnEntries.filter(e => weekStart(e.date) === oldestWeek)
-    : [];
+    const allRows: InvLineRow[] = [];
+    for (const e of abnEntries) {
+      if (e.rABN > 0)  allRows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                     client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
+      if (e.otABN > 0) allRows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`, client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
+    }
+    for (const item of extraItems) allRows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
+    allRows.sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      return d !== 0 ? d : (a.startTime ?? "").localeCompare(b.startTime ?? "");
+    });
 
-  const invNum  = settings.invoiceNum || 1;
-
-  const allRows: InvLineRow[] = [];
-  for (const e of abnEntries) {
-    if (e.rABN > 0)  allRows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                     client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
-    if (e.otABN > 0) allRows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`, client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
-  }
-  for (const item of extraItems) {
-    allRows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
-  }
-  allRows.sort((a, b) => {
-    const d = a.date.localeCompare(b.date);
-    return d !== 0 ? d : (a.startTime ?? "").localeCompare(b.startTime ?? "");
-  });
+    const weekAbn  = abnEntries.reduce((s, e) => s + e.abnEarnings, 0);
+    const subtotal = weekAbn + extraItems.reduce((a, i) => a + i.amount, 0);
+    const gst      = settings.gstRegistered ? subtotal * 0.1 : 0;
+    return { extraItems, allAbnEntries, oldestWeek, pendingWeeks, abnEntries, allRows, subtotal, gst, invoiceTotal: subtotal + gst };
+  }, [processed, settings.invoiceItems, settings.gstRegistered]);
 
   const addItem = () => {
     if (!newDate)        { setAddError("Date is required"); return; }
@@ -50,11 +50,6 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, 
     onItemsChange([...extraItems, { id: genId(), date: newDate, description: newDesc.trim(), amount: amt }]);
     setNewDesc(""); setNewAmt("");
   };
-
-  const weekAbn      = abnEntries.reduce((s, e) => s + e.abnEarnings, 0);
-  const subtotal     = weekAbn + extraItems.reduce((a, i) => a + i.amount, 0);
-  const gst          = settings.gstRegistered ? subtotal * 0.1 : 0;
-  const invoiceTotal = subtotal + gst;
 
   return (
     <div>

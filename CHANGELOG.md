@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.34] - 2026-05-17
+
+### Performance / Fixed
+
+- **weekStart() consolidated** — removed two duplicate local implementations (one DST-unsafe, using midnight) from `EarningsChart.tsx` and `WeeklyReport.tsx`; both now import the single noon-anchored version from `lib/calculations.ts`. Eliminates a data-integrity risk where entries on a DST boundary could land in the wrong invoice week.
+- **Form state moved local to LogEntry** — `form` and `setForm` removed from `useAppData.ts` (was 1 of the 23 top-level `useState` calls); `LogEntry` now owns its own form state. Every keystroke in the log form previously caused a full app re-render (Dashboard, EntriesList, WeeklyReport, etc.); now only `LogEntry` re-renders. `handleSave` and `handleSaveTemplate` accept `FormState` as a parameter. `editEntry` (derived from `editId` + `entries`) is passed down instead of `form/setForm/editId`; `key={editEntry?.id ?? "new"}` on `LogEntry` ensures the form resets cleanly on save or cancel. Preview calculations are now `useMemo`-wrapped so they only recompute when the relevant fields change.
+- **Toast timer leak fixed** — `showToast` now clears any pending `setTimeout` before scheduling a new one (rapid successive toasts no longer accumulate orphaned timers); the timer is also cleaned up on unmount via `useEffect` return.
+- **ABNInvoice invoice computation memoized** — all entry filtering, week grouping, row building, sorting, and totals calculation wrapped in `useMemo` keyed on `[processed, settings.invoiceItems, settings.gstRegistered]`; typing in the extra-items form or toggling the download state no longer re-runs O(n log n) work on every keystroke.
+- **WeeklyReport week grouping memoized** — `weekMap` / `weeks` / `grandTotal` wrapped in `useMemo` keyed on `[visible]`; toggling a row's expand arrow no longer re-runs the full aggregation on every render.
+
+---
+
 ## [0.5.33] - 2026-05-17
 
 ### Added

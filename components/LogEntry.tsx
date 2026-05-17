@@ -1,23 +1,38 @@
 import React from "react";
-import type { EntryTemplate, FormState } from "@/types";
+import type { Entry, EntryTemplate, FormState } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
-import { fh, fc } from "@/lib/formatters";
+import { fh, fc, todayStr } from "@/lib/formatters";
 
-export const LogEntry = React.memo(function LogEntry({ form, setForm, editId, onSave, onCancel, clients, templates, onSaveTemplate }: {
-  form: FormState;
-  setForm: React.Dispatch<React.SetStateAction<FormState>>;
-  editId: string | null;
-  onSave: () => void;
+export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCancel, clients, templates, onSaveTemplate }: {
+  editEntry?: Entry | null;
+  onSave: (formData: FormState) => Promise<boolean>;
   onCancel: () => void;
   clients?: string[];
   templates?: EntryTemplate[];
-  onSaveTemplate?: () => void;
+  onSaveTemplate?: (formData: FormState) => void;
 }) {
-  const breakMinsNum  = parseInt(form.breakMins || "0") || 0;
-  const previewRaw    = calcHours(form.startTime, form.endTime);
-  const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
-  const previewH      = Math.max(MIN_HOURS, previewActual);
-  const previewEarn   = previewH * parseFloat(form.hourlyRate || "0");
+  const [form, setForm] = React.useState<FormState>(() =>
+    editEntry
+      ? {
+          date:           editEntry.date,
+          jobDescription: editEntry.jobDescription,
+          startTime:      editEntry.startTime,
+          endTime:        editEntry.endTime,
+          hourlyRate:     String(editEntry.hourlyRate),
+          breakMins:      editEntry.breakMins ? String(editEntry.breakMins) : "",
+          client:         editEntry.client ?? "",
+        }
+      : { date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" }
+  );
+
+  const { breakMinsNum, previewRaw, previewActual, previewH, previewEarn } = React.useMemo(() => {
+    const breakMinsNum  = parseInt(form.breakMins || "0") || 0;
+    const previewRaw    = calcHours(form.startTime, form.endTime);
+    const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
+    const previewH      = Math.max(MIN_HOURS, previewActual);
+    return { breakMinsNum, previewRaw, previewActual, previewH, previewEarn: previewH * parseFloat(form.hourlyRate || "0") };
+  }, [form.breakMins, form.startTime, form.endTime, form.hourlyRate]);
+
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
   const applyTemplate = (t: EntryTemplate) => {
@@ -31,11 +46,18 @@ export const LogEntry = React.memo(function LogEntry({ form, setForm, editId, on
     }));
   };
 
+  const handleSubmit = React.useCallback(async () => {
+    const ok = await onSave(form);
+    if (ok && !editEntry) {
+      setForm(prev => ({ date: prev.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" }));
+    }
+  }, [form, onSave, editEntry]);
+
   return (
     <div>
-      <h2 className="sr-only">{editId ? "Edit entry" : "Log work hours"}</h2>
+      <h2 className="sr-only">{editEntry ? "Edit entry" : "Log work hours"}</h2>
 
-      {!editId && templates && templates.length > 0 && (
+      {!editEntry && templates && templates.length > 0 && (
         <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>Quick fill:</span>
           {templates.map(t => (
@@ -61,7 +83,7 @@ export const LogEntry = React.memo(function LogEntry({ form, setForm, editId, on
 
       <div className="card" style={{ maxWidth: 560 }}>
         <p style={{ fontWeight: 500, marginBottom: 16 }}>
-          {editId ? "Edit Entry" : "Log Work Hours"}
+          {editEntry ? "Edit Entry" : "Log Work Hours"}
         </p>
         <div className="form-grid">
           <div className="field full">
@@ -129,17 +151,17 @@ export const LogEntry = React.memo(function LogEntry({ form, setForm, editId, on
         )}
 
         <div className="btn-row">
-          <button className="btn-primary" onClick={onSave}>
+          <button className="btn-primary" onClick={handleSubmit}>
             <i className="ti ti-check" aria-hidden="true" />
-            {editId ? "Update Entry" : "Add Entry"}
+            {editEntry ? "Update Entry" : "Add Entry"}
           </button>
-          {editId ? (
+          {editEntry ? (
             <button className="btn-secondary" onClick={onCancel}>
               <i className="ti ti-x" aria-hidden="true" />
               Cancel
             </button>
           ) : (
-            <button className="btn-secondary" onClick={onSaveTemplate} title="Save current fields as a reusable template">
+            <button className="btn-secondary" onClick={() => onSaveTemplate?.(form)} title="Save current fields as a reusable template">
               <i className="ti ti-bookmark" aria-hidden="true" />
               Save as template
             </button>
