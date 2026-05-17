@@ -3,11 +3,12 @@ import type { Entry, FormState } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc } from "@/lib/formatters";
 
-export const AdminEditModal = React.memo(function AdminEditModal({ entry, userName, onSave, onClose }: {
+export const AdminEditModal = React.memo(function AdminEditModal({ entry, userName, onSave, onClose, clients }: {
   entry: Entry;
   userName: string;
   onSave: (updated: Entry) => void;
   onClose: () => void;
+  clients?: string[];
 }) {
   const [form, setForm] = useState<FormState>({
     date:           entry.date,
@@ -16,6 +17,7 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
     endTime:        entry.endTime,
     hourlyRate:     String(entry.hourlyRate),
     breakMins:      entry.breakMins ? String(entry.breakMins) : "",
+    client:         entry.client || "",
   });
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -37,6 +39,7 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
       endTime:        form.endTime,
       hourlyRate:     hourlyRateNum,
       breakMins:      breakMinsNum,
+      client:         form.client.trim() || undefined,
     });
   };
 
@@ -80,6 +83,15 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
           <div className="field">
             <label>Break (mins)</label>
             <input type="number" min="0" step="5" value={form.breakMins} onChange={e => f("breakMins", e.target.value)} />
+          </div>
+          <div className="field full">
+            <label>Client / Project <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+            <input type="text" list="am-client-list" placeholder="e.g. Acme Corp" value={form.client} onChange={e => f("client", e.target.value)} />
+            {clients && clients.length > 0 && (
+              <datalist id="am-client-list">
+                {clients.map(c => <option key={c} value={c} />)}
+              </datalist>
+            )}
           </div>
         </div>
 

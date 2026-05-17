@@ -3,12 +3,13 @@ import type { FormState } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc } from "@/lib/formatters";
 
-export const LogEntry = React.memo(function LogEntry({ form, setForm, editId, onSave, onCancel }: {
+export const LogEntry = React.memo(function LogEntry({ form, setForm, editId, onSave, onCancel, clients }: {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   editId: string | null;
   onSave: () => void;
   onCancel: () => void;
+  clients?: string[];
 }) {
   const breakMinsNum  = parseInt(form.breakMins || "0") || 0;
   const previewRaw    = calcHours(form.startTime, form.endTime);
@@ -28,6 +29,15 @@ export const LogEntry = React.memo(function LogEntry({ form, setForm, editId, on
           <div className="field full">
             <label htmlFor="f-desc">Job description</label>
             <input id="f-desc" type="text" placeholder="What did you work on?" value={form.jobDescription} onChange={e => f("jobDescription", e.target.value)} />
+          </div>
+          <div className="field full">
+            <label htmlFor="f-client">Client / Project <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+            <input id="f-client" type="text" list="f-client-list" placeholder="e.g. Acme Corp" value={form.client} onChange={e => f("client", e.target.value)} />
+            {clients && clients.length > 0 && (
+              <datalist id="f-client-list">
+                {clients.map(c => <option key={c} value={c} />)}
+              </datalist>
+            )}
           </div>
           <div className="field">
             <label htmlFor="f-date">Date</label>

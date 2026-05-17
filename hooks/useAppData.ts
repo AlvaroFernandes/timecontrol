@@ -27,7 +27,7 @@ export function useAppData() {
   const [toast,           setToast]           = useState<Toast | null>(null);
   const [editId,          setEditId]          = useState<string | null>(null);
   const [form,            setForm]            = useState<FormState>({
-    date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "",
+    date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "",
   });
   const [theme,           setTheme]           = useState<"light" | "dark">("light");
   const [userId,          setUserId]          = useState<string | null>(null);
@@ -186,7 +186,7 @@ export function useAppData() {
     setEntries(newEntries);
     showToast(editId ? "Entry updated" : "Entry added");
     setEditId(null);
-    setForm({ date: form.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: settings.defaultRate || "", breakMins: "" });
+    setForm({ date: form.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: settings.defaultRate || "", breakMins: "", client: "" });
   }, [form, editId, userId, entries, settings.defaultRate]); // showToast/saveEntry/setters are stable
 
   const handleEdit = useCallback((entry: ProcessedEntry) => {
@@ -199,6 +199,7 @@ export function useAppData() {
         startTime: entry.startTime, endTime: entry.endTime,
         hourlyRate: String(entry.hourlyRate),
         breakMins: entry.breakMins ? String(entry.breakMins) : "",
+        client: entry.client || "",
       });
       setTab("log");
     }
@@ -314,6 +315,10 @@ export function useAppData() {
       ],
   [userRole]);
 
+  const clients = useMemo(() =>
+    [...new Set(entries.map(e => e.client).filter(Boolean))].sort() as string[],
+  [entries]);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleInvite = useCallback(async (email: string, role: "user" | "admin") => {
     const res = await fetch("/api/invite", {
@@ -381,7 +386,7 @@ export function useAppData() {
 
   const handleCancelEdit = useCallback(() => {
     setEditId(null);
-    setForm({ date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "" });
+    setForm({ date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" });
   }, []); // all stable setters
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -421,7 +426,7 @@ export function useAppData() {
     toggleTheme, signOut, updatePeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
-    workerSettings, managedAdmins,
+    workerSettings, managedAdmins, clients,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
     updateInvoiceItems,
   };

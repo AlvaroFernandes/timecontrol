@@ -286,8 +286,13 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                       {fd(e.date)}
                       {e.archived && <span style={{ marginLeft: 6, fontSize: 10, background: "var(--color-background-tertiary)", color: "var(--color-text-tertiary)", padding: "1px 5px", borderRadius: 3 }}>invoiced</span>}
                     </td>
-                    <td colSpan={isAdmin ? 1 : 2} style={{ fontSize: 12, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {e.jobDescription}
+                    <td colSpan={isAdmin ? 1 : 2} style={{ fontSize: 12, maxWidth: 200 }}>
+                      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.jobDescription}</div>
+                      {e.client && (
+                        <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <i className="ti ti-building" aria-hidden="true" style={{ marginRight: 3 }} />{e.client}
+                        </div>
+                      )}
                     </td>
                     {isAdmin && (
                       <td style={{ fontSize: 11, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>

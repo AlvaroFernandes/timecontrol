@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { ManagedUser, ProcessedEntry } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Bdg } from "./ui";
@@ -12,33 +12,62 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
   userFilter?: string;
   onUserFilterChange?: (v: string) => void;
 }) {
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingId,   setDeletingId]   = useState<string | null>(null);
+  const [clientFilter, setClientFilter] = useState<string>("all");
 
   const handleDeleteClick = async (id: string) => {
     setDeletingId(id);
     try { await onDelete(id); } finally { setDeletingId(null); }
   };
 
-  const visible = isAdmin && userFilter && userFilter !== "all"
-    ? processed.filter(e => e.ownerId === userFilter)
-    : processed;
+  const clientOptions = useMemo(() =>
+    [...new Set(processed.map(e => e.client).filter(Boolean))].sort() as string[],
+  [processed]);
+
+  const visible = useMemo(() => {
+    let rows = isAdmin && userFilter && userFilter !== "all"
+      ? processed.filter(e => e.ownerId === userFilter)
+      : processed;
+    if (clientFilter !== "all") rows = rows.filter(e => e.client === clientFilter);
+    return rows;
+  }, [processed, isAdmin, userFilter, clientFilter]);
+
+  const hasClients = clientOptions.length > 0;
 
   return (
     <div>
       <h2 className="sr-only">All entries for current period</h2>
 
-      {isAdmin && users && users.length > 0 && (
-        <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-          <label htmlFor="user-filter" style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>Filter by user:</label>
-          <select
-            id="user-filter"
-            value={userFilter ?? "all"}
-            onChange={e => onUserFilterChange?.(e.target.value)}
-            style={{ fontSize: 13, padding: "4px 8px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-secondary)", color: "var(--color-text-primary)" }}
-          >
-            <option value="all">All users</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+      {(isAdmin && users && users.length > 0 || hasClients) && (
+        <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {isAdmin && users && users.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <label htmlFor="user-filter" style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>User:</label>
+              <select
+                id="user-filter"
+                value={userFilter ?? "all"}
+                onChange={e => onUserFilterChange?.(e.target.value)}
+                style={{ fontSize: 13, padding: "4px 8px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-secondary)", color: "var(--color-text-primary)" }}
+              >
+                <option value="all">All users</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
+          {hasClients && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <label htmlFor="client-filter" style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>Client:</label>
+              <select
+                id="client-filter"
+                value={clientFilter}
+                onChange={e => setClientFilter(e.target.value)}
+                style={{ fontSize: 13, padding: "4px 8px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-secondary)", color: "var(--color-text-primary)" }}
+              >
+                <option value="all">All clients</option>
+                {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{visible.length} entries</span>
         </div>
       )}
@@ -55,7 +84,9 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
               <tr>
                 <th>Date</th>
                 {isAdmin && <th>User</th>}
-                <th>Job</th><th>Time</th>
+                <th>Job</th>
+                {hasClients && <th>Client</th>}
+                <th>Time</th>
                 <th>Hours</th><th>Rate</th>
                 {!isAdmin && <th>Split</th>}
                 <th>Earnings</th><th></th>
@@ -73,6 +104,11 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
                   <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {e.jobDescription}
                   </td>
+                  {hasClients && (
+                    <td style={{ fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                      {e.client ?? <span className="muted">—</span>}
+                    </td>
+                  )}
                   <td className="mono" style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
                     {e.startTime}–{e.endTime}
                     {e.breakMins > 0 && (

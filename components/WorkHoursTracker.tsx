@@ -32,7 +32,7 @@ export default function WorkHoursTracker() {
     toggleTheme, signOut, updatePeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
-    workerSettings, managedAdmins,
+    workerSettings, managedAdmins, clients,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
     updateInvoiceItems,
   } = useAppData();
@@ -90,7 +90,7 @@ export default function WorkHoursTracker() {
         )}
         {tab === "log" && userRole !== "admin" && (
           <LogEntry form={form} setForm={setForm} editId={editId}
-            onSave={handleSave} onCancel={handleCancelEdit} />
+            onSave={handleSave} onCancel={handleCancelEdit} clients={clients} />
         )}
         {tab === "entries" && (
           <EntriesList processed={processed} onEdit={handleEdit} onDelete={handleDelete}
@@ -133,6 +133,7 @@ export default function WorkHoursTracker() {
           userName={managedUsers.find(u => u.id === adminEditEntry.ownerId)?.name ?? "Unknown"}
           onSave={handleAdminSave}
           onClose={handleAdminClose}
+          clients={clients}
         />
       )}
 

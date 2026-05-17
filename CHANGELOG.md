@@ -6,6 +6,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.25] - 2026-05-17
+
+### Added
+- **Client / Project tagging** — every entry can now be tagged with an optional client or project name
+  - `LogEntry.tsx` — new "Client / Project (optional)" input with `datalist` autocomplete from previously used client names
+  - `AdminEditModal.tsx` — same field added to the admin edit overlay
+  - `EntriesList.tsx` — Client column (shown only when at least one entry has a client); client filter dropdown alongside the existing user filter; filter combines additively with user filter
+  - `WeeklyReport.tsx` — client name shown as a sub-line (with building icon) below the job description in expanded day rows
+  - `hooks/useAppData.ts` — `clients` list derived via `useMemo` and threaded through to all relevant components
+  - `services/entries.ts` — `client` field round-tripped through `rowToEntry` / `entryToRow`
+  - `types/index.ts` — `client?: string` added to `Entry`; `client: string` added to `FormState`
+  - `supabase/migrations/011_entries_client.sql` — `client text` column added to the `entries` table
+
+---
+
 ## [0.5.24] - 2026-05-16
 
 ### Fixed

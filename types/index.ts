@@ -7,6 +7,7 @@ export interface Entry {
   hourlyRate: number;
   breakMins: number;
   archived?: boolean;
+  client?: string;
   ownerId?: string; // admin: the user_id who owns this entry
 }
 
@@ -80,6 +81,7 @@ export interface FormState {
   endTime: string;
   hourlyRate: string;
   breakMins: string;
+  client: string;
 }
 
 export interface Toast {
