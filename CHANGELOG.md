@@ -6,6 +6,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.31] - 2026-05-17
+
+### Added
+- **Admin CSV export** — "Export CSV" button in the admin Dashboard Users summary card downloads a single file containing two sections: a per-worker summary (hours, TFN/ABN/OT split, earnings) and a full detailed entries list; filename includes the active period dates
+  - `components/Dashboard.tsx` — `downloadAdminCSV` helper builds and triggers the download client-side (no API); `periodStart` / `periodEnd` added as optional props
+  - `components/WorkHoursTracker.tsx` — passes `periodStart` and `periodEnd` to `Dashboard`
+
+---
+
 ## [0.5.30] - 2026-05-17
 
 ### Added

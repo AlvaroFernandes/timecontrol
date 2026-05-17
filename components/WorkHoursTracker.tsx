@@ -118,7 +118,8 @@ export default function WorkHoursTracker() {
       <main className="main-content">
         {tab === "dashboard" && (
           <Dashboard totals={totals} tfnPct={tfnPct} settings={settings} processed={processed}
-            isAdmin={userRole === "admin"} users={managedUsers} />
+            isAdmin={userRole === "admin"} users={managedUsers}
+            periodStart={periodStart} periodEnd={periodEnd} />
         )}
         {tab === "log" && userRole !== "admin" && (
           <LogEntry form={form} setForm={setForm} editId={editId}

@@ -4,9 +4,82 @@ import { fh, fc, fd } from "@/lib/formatters";
 import { Metric, Bdg } from "./ui";
 import { EarningsChart } from "./EarningsChart";
 
-export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, settings, processed, isAdmin, users }: {
+function csvEsc(v: string | number): string {
+  const s = String(v);
+  return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadAdminCSV(
+  processed: ProcessedEntry[],
+  users: ManagedUser[],
+  periodStart: string,
+  periodEnd: string,
+) {
+  const rows: string[] = [];
+  const period = `${periodStart || "All time"} to ${periodEnd || "All time"}`;
+
+  // — Summary section —
+  rows.push(`SplitShift — Admin Export`);
+  rows.push(`Period,${period}`);
+  rows.push(``);
+  rows.push(`WORKER SUMMARY`);
+  rows.push([
+    "Name", "Email", "Entries",
+    "Total Hrs", "TFN Hrs", "ABN Hrs", "OT Hrs",
+    "TFN Earnings (AUD)", "ABN Earnings (AUD)", "Total Earnings (AUD)",
+  ].map(csvEsc).join(","));
+
+  for (const u of users) {
+    const ue = processed.filter(e => e.ownerId === u.id);
+    if (ue.length === 0) continue;
+    rows.push([
+      u.name, u.email, ue.length,
+      ue.reduce((a, e) => a + e.total,        0).toFixed(2),
+      ue.reduce((a, e) => a + e.tfnPortion,   0).toFixed(2),
+      ue.reduce((a, e) => a + e.abnPortion,   0).toFixed(2),
+      ue.reduce((a, e) => a + e.overtime,     0).toFixed(2),
+      ue.reduce((a, e) => a + e.tfnEarnings,  0).toFixed(2),
+      ue.reduce((a, e) => a + e.abnEarnings,  0).toFixed(2),
+      ue.reduce((a, e) => a + e.totalEarnings,0).toFixed(2),
+    ].map(csvEsc).join(","));
+  }
+
+  // — Detailed entries section —
+  rows.push(``);
+  rows.push(`DETAILED ENTRIES`);
+  rows.push([
+    "Date", "Worker", "Job Description", "Client",
+    "Start", "End", "Break (min)", "Hours", "Rate (AUD/h)",
+    "TFN Hrs", "ABN Hrs", "OT Hrs",
+    "TFN Earnings", "ABN Earnings", "Total Earnings",
+  ].map(csvEsc).join(","));
+
+  const sorted = [...processed].sort((a, b) =>
+    a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)
+  );
+  for (const e of sorted) {
+    const workerName = users.find(u => u.id === e.ownerId)?.name ?? "Unknown";
+    rows.push([
+      e.date, workerName, e.jobDescription, e.client ?? "",
+      e.startTime, e.endTime, e.breakMins, e.total.toFixed(2), e.hourlyRate.toFixed(2),
+      e.tfnPortion.toFixed(2), e.abnPortion.toFixed(2), e.overtime.toFixed(2),
+      e.tfnEarnings.toFixed(2), e.abnEarnings.toFixed(2), e.totalEarnings.toFixed(2),
+    ].map(csvEsc).join(","));
+  }
+
+  const blob = new Blob([rows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `splitshift-${(periodStart || "all").replace(/-/g, "")}-${(periodEnd || "all").replace(/-/g, "")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, settings, processed, isAdmin, users, periodStart, periodEnd }: {
   totals: Totals; tfnPct: number; settings: Settings; processed: ProcessedEntry[];
   isAdmin?: boolean; users?: ManagedUser[];
+  periodStart?: string; periodEnd?: string;
 }) {
   const { byDate, dates } = useMemo(() => {
     const byDate: Record<string, ProcessedEntry[]> = {};
@@ -41,7 +114,16 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
 
         {userStats.length > 0 && (
           <div className="card mt-4" style={{ overflowX: "auto" }}>
-            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>Users summary</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: 0 }}>Users summary</p>
+              <button
+                className="btn-secondary"
+                style={{ fontSize: 12, padding: "4px 10px" }}
+                onClick={() => downloadAdminCSV(processed, users, periodStart ?? "", periodEnd ?? "")}
+              >
+                <i className="ti ti-download" aria-hidden="true" /> Export CSV
+              </button>
+            </div>
             <table className="data-table">
               <thead>
                 <tr><th>User</th><th>Entries</th><th>Hours</th><th>Earnings</th></tr>
