@@ -89,6 +89,17 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
               <input id="s-abn" type="text" placeholder="12 345 678 901" value={s.abn} onChange={e => f("abn", e.target.value)} />
             </div>
             <div className="field full">
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={s.gstRegistered === true}
+                  onChange={e => setS(prev => ({ ...prev, gstRegistered: e.target.checked }))}
+                />
+                Registered for GST
+                <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-text-tertiary)" }}>(adds 10% GST to ABN invoices)</span>
+              </label>
+            </div>
+            <div className="field full">
               <label htmlFor="s-addr">Your address</label>
               <input id="s-addr" type="text" placeholder="Street, Suburb - State Postcode" value={s.yourAddress} onChange={e => f("yourAddress", e.target.value)} />
             </div>

@@ -6,7 +6,9 @@ import { DEFAULT_SETTINGS } from "@/services/settings";
 function SavedInvoiceDoc({ inv }: { inv: SavedInvoice }) {
   const s = { ...DEFAULT_SETTINGS, ...inv.data.settings } as Settings;
   const rows = inv.data.rows || [];
-  const subtotal = inv.subtotal;
+  const subtotal     = inv.subtotal;
+  const gst          = s.gstRegistered ? subtotal * 0.1 : 0;
+  const invoiceTotal = subtotal + gst;
 
   return (
     <div id="saved-invoice-doc" className="invoice-doc">
@@ -69,8 +71,11 @@ function SavedInvoiceDoc({ inv }: { inv: SavedInvoice }) {
         </div>
         <div className="inv-box">
           <div className="inv-totals-line"><span>Subtotal</span><span>$ {subtotal.toFixed(2)}</span></div>
-          <div className="inv-totals-line"><span>Tax (0.00%)</span><span>$ 0.00</span></div>
-          <div className="inv-totals-line total"><span>Total</span><span>$ {subtotal.toFixed(2)}</span></div>
+          <div className="inv-totals-line">
+            <span>{s.gstRegistered ? "GST (10%)" : "GST (N/A)"}</span>
+            <span>$ {gst.toFixed(2)}</span>
+          </div>
+          <div className="inv-totals-line total"><span>Total</span><span>$ {invoiceTotal.toFixed(2)}</span></div>
         </div>
       </div>
 
@@ -150,7 +155,9 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
                 <td className="mono" style={{ fontWeight: 500 }}>#{inv.invoiceNum}</td>
                 <td className="mono" style={{ fontSize: 12 }}>{fdInv(inv.issueDate)}</td>
                 <td>{inv.companyName || <span className="muted">—</span>}</td>
-                <td className="mono" style={{ fontWeight: 500 }}>$ {inv.subtotal.toFixed(2)}</td>
+                <td className="mono" style={{ fontWeight: 500 }}>
+                  $ {(inv.subtotal * (({ ...DEFAULT_SETTINGS, ...inv.data.settings } as Settings).gstRegistered ? 1.1 : 1)).toFixed(2)}
+                </td>
                 <td>
                   <span style={{ display: "flex", gap: 4 }}>
                     <button className="icon-btn-sm" onClick={() => onView(inv)} aria-label="View invoice">

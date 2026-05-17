@@ -41,7 +41,9 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
     setNewDesc(""); setNewAmt("");
   };
 
-  const subtotal = totals.abnEarnings + extraItems.reduce((a, i) => a + i.amount, 0);
+  const subtotal     = totals.abnEarnings + extraItems.reduce((a, i) => a + i.amount, 0);
+  const gst          = settings.gstRegistered ? subtotal * 0.1 : 0;
+  const invoiceTotal = subtotal + gst;
 
   return (
     <div>
@@ -186,8 +188,11 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
               </div>
               <div className="inv-box">
                 <div className="inv-totals-line"><span>Subtotal</span><span>$ {subtotal.toFixed(2)}</span></div>
-                <div className="inv-totals-line"><span>Tax (0.00%)</span><span>$ 0.00</span></div>
-                <div className="inv-totals-line total"><span>Total</span><span>$ {subtotal.toFixed(2)}</span></div>
+                <div className="inv-totals-line">
+                  <span>{settings.gstRegistered ? "GST (10%)" : "GST (N/A)"}</span>
+                  <span>$ {gst.toFixed(2)}</span>
+                </div>
+                <div className="inv-totals-line total"><span>Total</span><span>$ {invoiceTotal.toFixed(2)}</span></div>
               </div>
             </div>
 

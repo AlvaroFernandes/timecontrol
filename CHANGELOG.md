@@ -6,6 +6,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.30] - 2026-05-17
+
+### Added
+- **GST registration toggle** — contractors registered for GST can now enable it in Settings → Personal; ABN invoices (live and saved) will display a GST (10%) line and the correct GST-inclusive total
+  - `components/SettingsPage.tsx` — "Registered for GST" checkbox in the Personal tab below the ABN field
+  - `components/ABNInvoice.tsx` — computes `gst = subtotal × 0.1` when `gstRegistered`; invoice shows Subtotal / GST / Total; label reads "GST (N/A)" when not registered
+  - `components/InvoiceHistory.tsx` — saved invoice viewer applies the same logic using the snapshot settings; invoice list row also shows the GST-inclusive total
+  - `types/index.ts` — `gstRegistered?: boolean` added to `Settings`
+
+---
+
 ## [0.5.29] - 2026-05-17
 
 ### Added

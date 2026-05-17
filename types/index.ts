@@ -74,6 +74,7 @@ export interface Settings {
   templates?: EntryTemplate[];
   reminderEnabled?: boolean;
   reminderDays?: number;
+  gstRegistered?: boolean;
 }
 
 export interface Totals {
