@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import type { ManagedUser, ProcessedEntry, Settings, Totals } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Metric, Bdg } from "./ui";
+import { EarningsChart } from "./EarningsChart";
 
 export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, settings, processed, isAdmin, users }: {
   totals: Totals; tfnPct: number; settings: Settings; processed: ProcessedEntry[];
@@ -35,6 +36,8 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
           <Metric label="Total earnings" value={fc(totals.total)}       bold />
           <Metric label="Users"          value={String(users.length)}  sub="managed" />
         </div>
+
+        <EarningsChart processed={processed} isAdmin />
 
         {userStats.length > 0 && (
           <div className="card mt-4" style={{ overflowX: "auto" }}>
@@ -103,6 +106,8 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
         <Metric label="ABN earnings"   value={fc(totals.abnEarnings)} color="info" />
         <Metric label="Total earnings" value={fc(totals.total)}       bold />
       </div>
+
+      <EarningsChart processed={processed} />
 
       {dates.length > 0 ? (
         <div className="card mt-4">

@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.29] - 2026-05-17
+
+### Added
+- **Earnings trend chart** — plain-SVG bar chart on the Dashboard showing earnings grouped by week or month; no external library added
+  - Worker view: stacked bars with TFN (green) at the bottom and ABN (blue) on top, with a legend; compact value labels above each bar
+  - Admin view: single-colour bars showing combined team earnings per period
+  - Weekly / Monthly toggle in the chart header; chart scrolls horizontally when there are many bars
+  - `components/EarningsChart.tsx` — new self-contained chart component; receives `processed: ProcessedEntry[]` and `isAdmin?: boolean`
+  - `components/Dashboard.tsx` — chart rendered after the metrics grids in both worker and admin layouts
+
+---
+
 ## [0.5.28] - 2026-05-17
 
 ### Added
