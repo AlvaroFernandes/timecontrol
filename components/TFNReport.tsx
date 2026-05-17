@@ -7,8 +7,9 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
   periodStart: string; periodEnd: string;
 }) {
   const tfnEntries = processed.filter(e => e.tfnPortion > 0);
-  const regHrs = tfnEntries.reduce((a, e) => a + e.rTFN,  0);
-  const otHrs  = tfnEntries.reduce((a, e) => a + e.otTFN, 0);
+  const regHrs    = tfnEntries.reduce((a, e) => a + e.rTFN,  0);
+  const otHrs     = tfnEntries.reduce((a, e) => a + e.otTFN, 0);
+  const hasClients = tfnEntries.some(e => e.client);
 
   return (
     <div>
@@ -45,6 +46,7 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
               <thead>
                 <tr>
                   <th>Date</th><th>Job description</th>
+                  {hasClients && <th>Client</th>}
                   <th>Start</th><th>End</th>
                   <th>Regular hrs</th>
                 </tr>
@@ -54,6 +56,7 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                   <tr key={e.id}>
                     <td className="mono" style={{ fontSize: 12 }}>{fd(e.date)}</td>
                     <td>{e.jobDescription}</td>
+                    {hasClients && <td style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{e.client ?? <span className="muted">—</span>}</td>}
                     <td className="mono">{e.startTime}</td>
                     <td className="mono">{e.endTime}</td>
                     <td className="mono">{fh(e.rTFN)}</td>

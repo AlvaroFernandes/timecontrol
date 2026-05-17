@@ -104,6 +104,7 @@ export interface InvLineRow {
   date: string;
   startTime?: string;
   description: string;
+  client?: string;
   rate: number | null;
   hours: number | null;
   amount: number;

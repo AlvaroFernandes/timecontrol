@@ -345,8 +345,8 @@ export function useAppData() {
     const abnEntries = processed.filter(e => e.abnPortion > 0);
     const rows: InvLineRow[] = [];
     for (const e of abnEntries) {
-      if (e.rABN > 0)  rows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                      rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
-      if (e.otABN > 0) rows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`,  rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
+      if (e.rABN > 0)  rows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                      client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
+      if (e.otABN > 0) rows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`,  client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
     }
     for (const item of extraItems) rows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
     rows.sort((a, b) => {

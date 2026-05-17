@@ -45,7 +45,10 @@ function SavedInvoiceDoc({ inv }: { inv: SavedInvoice }) {
           {rows.map((row: InvLineRow) => (
             <tr key={row.key}>
               <td style={{ whiteSpace: "nowrap" }}>{fdInv(row.date)}</td>
-              <td>{row.description}</td>
+              <td>
+                {row.description}
+                {row.client && <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{row.client}</div>}
+              </td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap", color: row.rate === null ? "#999" : undefined }}>{row.rate !== null ? `$ ${row.rate.toFixed(2)}` : "—"}</td>
               <td style={{ textAlign: "right", color: row.hours === null ? "#999" : undefined }}>{row.hours !== null ? row.hours.toFixed(2) : "—"}</td>
               <td style={{ textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>$ {row.amount.toFixed(2)}</td>

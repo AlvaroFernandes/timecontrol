@@ -20,8 +20,8 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
 
   const allRows: InvLineRow[] = [];
   for (const e of abnEntries) {
-    if (e.rABN > 0)  allRows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                     rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
-    if (e.otABN > 0) allRows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
+    if (e.rABN > 0)  allRows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                     client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
+    if (e.otABN > 0) allRows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`, client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
   }
   for (const item of extraItems) {
     allRows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
@@ -160,7 +160,10 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
                 {allRows.map(row => (
                   <tr key={row.key}>
                     <td style={{ whiteSpace: "nowrap" }}>{fdInv(row.date)}</td>
-                    <td>{row.description}</td>
+                    <td>
+                      {row.description}
+                      {row.client && <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{row.client}</div>}
+                    </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap", color: row.rate === null ? "#999" : undefined }}>{row.rate !== null ? `$ ${row.rate.toFixed(2)}` : "—"}</td>
                     <td style={{ textAlign: "right", color: row.hours === null ? "#999" : undefined }}>{row.hours !== null ? row.hours.toFixed(2) : "—"}</td>
                     <td style={{ textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>$ {row.amount.toFixed(2)}</td>

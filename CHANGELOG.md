@@ -6,6 +6,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.27] - 2026-05-17
+
+### Fixed
+- `TFNReport.tsx` — Client column now appears when any TFN entry has a client tag; shows `—` for entries without one
+- `ABNInvoice.tsx` — client name rendered as a sub-line below the job description in each invoice row
+- `InvoiceHistory.tsx` — same client sub-line shown in saved invoice viewers (applies to invoices advanced from this version onward)
+- `hooks/useAppData.ts` — `advanceInvoice` now includes `client` on each saved `InvLineRow` so the history viewer can display it
+- `types/index.ts` — `InvLineRow` gains `client?: string`
+
+---
+
 ## [0.5.26] - 2026-05-17
 
 ### Added
