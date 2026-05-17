@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import type { ProcessedEntry, Totals, Settings, InvoiceItem, InvLineRow } from "@/types";
-import { fh, fdInv, todayStr, genId, buildPdfFilename, downloadPdf } from "@/lib/formatters";
+import type { ProcessedEntry, Settings, InvoiceItem, InvLineRow } from "@/types";
+import { fdInv, todayStr, genId, buildPdfFilename, downloadPdf } from "@/lib/formatters";
 import { weekStart } from "@/lib/calculations";
 
-export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, settings, onAdvance, onItemsChange }: {
-  processed: ProcessedEntry[]; totals: Totals; settings: Settings;
+export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, onAdvance, onItemsChange }: {
+  processed: ProcessedEntry[]; settings: Settings;
   periodStart: string; periodEnd: string; onAdvance: () => void;
   onItemsChange: (items: InvoiceItem[]) => void;
 }) {
@@ -14,14 +14,19 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
   const [downloading, setDownloading] = useState(false);
   const [addError,    setAddError]    = useState<string | null>(null);
 
-  const abnEntries = processed.filter(e => e.abnPortion > 0);
-  const extraItems = settings.invoiceItems || [];
+  const extraItems  = settings.invoiceItems || [];
+  const allAbnEntries = processed.filter(e => e.abnPortion > 0);
 
-  // Count distinct weeks with ABN entries to know how many invoices will be created
-  const weekKeys   = [...new Set(abnEntries.map(e => weekStart(e.date)))].sort();
-  const weekCount  = weekKeys.length;
-  const firstNum   = settings.invoiceNum || 1;
-  const afterNum   = firstNum + weekCount; // invoice number after all are saved
+  // Show only the oldest uninvoiced week
+  const allWeeks   = [...new Set(allAbnEntries.map(e => weekStart(e.date)))].sort();
+  const oldestWeek = allWeeks[0] ?? null;
+  const pendingWeeks = allWeeks.length - 1; // weeks after this one
+
+  const abnEntries = oldestWeek
+    ? allAbnEntries.filter(e => weekStart(e.date) === oldestWeek)
+    : [];
+
+  const invNum  = settings.invoiceNum || 1;
 
   const allRows: InvLineRow[] = [];
   for (const e of abnEntries) {
@@ -46,7 +51,8 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
     setNewDesc(""); setNewAmt("");
   };
 
-  const subtotal     = totals.abnEarnings + extraItems.reduce((a, i) => a + i.amount, 0);
+  const weekAbn      = abnEntries.reduce((s, e) => s + e.abnEarnings, 0);
+  const subtotal     = weekAbn + extraItems.reduce((a, i) => a + i.amount, 0);
   const gst          = settings.gstRegistered ? subtotal * 0.1 : 0;
   const invoiceTotal = subtotal + gst;
 
@@ -72,19 +78,34 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
         {abnEntries.length > 0 && (
           <button className="btn-primary" onClick={onAdvance}>
             <i className="ti ti-check" aria-hidden="true" />
-            {weekCount === 1
-              ? `Mark Sent — advance to #${afterNum}`
-              : `Save ${weekCount} Invoices (#${firstNum}–#${afterNum - 1}) → next #${afterNum}`}
+            Mark Sent — advance to #{invNum + 1}
           </button>
         )}
       </div>
 
-      {abnEntries.length === 0 ? (
+      {pendingWeeks > 0 && (
+        <div className="no-print" style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 16px", marginBottom: 8,
+          background: "var(--color-background-secondary)",
+          borderLeft: "3px solid var(--color-text-info)",
+          borderRadius: "var(--border-radius-md)",
+          fontSize: 13,
+        }}>
+          <i className="ti ti-info-circle" aria-hidden="true" style={{ color: "var(--color-text-info)", flexShrink: 0 }} />
+          <span style={{ color: "var(--color-text-secondary)" }}>
+            Showing the oldest uninvoiced week.{" "}
+            <strong>{pendingWeeks} more week{pendingWeeks !== 1 ? "s" : ""}</strong> will be invoiced after this one.
+          </span>
+        </div>
+      )}
+
+      {allAbnEntries.length === 0 ? (
         <div className="empty-state">
           <i className="ti ti-circle-check" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-success)" }} />
           <p>No ABN hours to invoice</p>
           <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-            All hours are within the {settings.tfnLimit}h TFN limit
+            All hours are within the {settings.tfnLimit}h weekly TFN limit
           </p>
         </div>
       ) : (
@@ -143,9 +164,7 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
                 {settings.yourEmail   && <div>Email: {settings.yourEmail}</div>}
               </div>
               <div className="inv-title-col">
-                <h1 className="inv-title">
-                  {weekCount === 1 ? `TAX INVOICE #${firstNum}` : `TAX INVOICES #${firstNum}–#${afterNum - 1}`}
-                </h1>
+                <h1 className="inv-title">TAX INVOICE #{invNum}</h1>
                 <div style={{ marginTop: 14, lineHeight: 1.55 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>Invoice to: {settings.companyName || "Company Name"}</div>
                   {settings.companyAbn   && <div>ABN: {settings.companyAbn}</div>}
@@ -168,39 +187,18 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, totals, se
                 </tr>
               </thead>
               <tbody>
-                {(() => {
-                  let lastWeek = "";
-                  let wkNum = firstNum - 1;
-                  return allRows.map(row => {
-                    const rw = weekStart(row.date);
-                    const isNewWeek = rw !== lastWeek;
-                    if (isNewWeek) { lastWeek = rw; wkNum++; }
-                    const wkSunDate = new Date(rw + "T12:00:00");
-                    wkSunDate.setDate(wkSunDate.getDate() + 6);
-                    const wkSun = wkSunDate.toISOString().slice(0, 10);
-                    return (
-                      <React.Fragment key={row.key}>
-                        {isNewWeek && weekCount > 1 && (
-                          <tr>
-                            <td colSpan={5} style={{ padding: "8px 6px 4px", fontSize: 11, fontWeight: 700, color: "#888", letterSpacing: "0.04em", borderTop: lastWeek !== rw ? "1px solid #e5e7eb" : undefined, background: "transparent" }}>
-                              INVOICE #{wkNum} · {fdInv(rw)} – {fdInv(wkSun)}
-                            </td>
-                          </tr>
-                        )}
-                        <tr>
-                          <td style={{ whiteSpace: "nowrap" }}>{fdInv(row.date)}</td>
-                          <td>
-                            {row.description}
-                            {row.client && <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{row.client}</div>}
-                          </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap", color: row.rate === null ? "#999" : undefined }}>{row.rate !== null ? `$ ${row.rate.toFixed(2)}` : "—"}</td>
-                          <td style={{ textAlign: "right", color: row.hours === null ? "#999" : undefined }}>{row.hours !== null ? row.hours.toFixed(2) : "—"}</td>
-                          <td style={{ textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>$ {row.amount.toFixed(2)}</td>
-                        </tr>
-                      </React.Fragment>
-                    );
-                  });
-                })()}
+                {allRows.map(row => (
+                  <tr key={row.key}>
+                    <td style={{ whiteSpace: "nowrap" }}>{fdInv(row.date)}</td>
+                    <td>
+                      {row.description}
+                      {row.client && <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>{row.client}</div>}
+                    </td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap", color: row.rate === null ? "#999" : undefined }}>{row.rate !== null ? `$ ${row.rate.toFixed(2)}` : "—"}</td>
+                    <td style={{ textAlign: "right", color: row.hours === null ? "#999" : undefined }}>{row.hours !== null ? row.hours.toFixed(2) : "—"}</td>
+                    <td style={{ textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>$ {row.amount.toFixed(2)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
 

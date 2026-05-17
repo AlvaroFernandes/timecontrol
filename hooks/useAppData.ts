@@ -430,79 +430,58 @@ export function useAppData() {
     const abnEntries = processed.filter(e => e.abnPortion > 0);
     if (abnEntries.length === 0) return;
 
-    // One invoice per Mon–Sun week
-    const weekMap = new Map<string, typeof processed>();
-    for (const e of abnEntries) {
-      const wk = weekStart(e.date);
-      if (!weekMap.has(wk)) weekMap.set(wk, []);
-      weekMap.get(wk)!.push(e);
+    // Invoice only the oldest uninvoiced week — one invoice per click
+    const oldestWeek = [...new Set(abnEntries.map(e => weekStart(e.date)))].sort()[0];
+    const wkEntries  = abnEntries.filter(e => weekStart(e.date) === oldestWeek);
+
+    const rows: InvLineRow[] = [];
+    for (const e of wkEntries) {
+      if (e.rABN > 0)  rows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                      client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
+      if (e.otABN > 0) rows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`,  client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
     }
-    const weeks = [...weekMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+    for (const item of extraItems) rows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
+    rows.sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      return d !== 0 ? d : (a.startTime ?? "").localeCompare(b.startTime ?? "");
+    });
 
-    let nextNum  = settings.invoiceNum || 1;
-    const issueDate = settings.invoiceDate || todayStr();
-    const savedList: SavedInvoice[] = [];
+    const wkAbn    = wkEntries.reduce((s, e) => s + e.abnEarnings, 0);
+    const subtotal = wkAbn + extraItems.reduce((s, it) => s + it.amount, 0);
 
-    for (let i = 0; i < weeks.length; i++) {
-      const [wkMon, wkEntries] = weeks[i];
-      const isLast = i === weeks.length - 1;
-      const items  = isLast ? extraItems : [];
+    const wkSunDate = new Date(oldestWeek + "T12:00:00");
+    wkSunDate.setDate(wkSunDate.getDate() + 6);
+    const wkSun = wkSunDate.toISOString().slice(0, 10);
 
-      const rows: InvLineRow[] = [];
-      for (const e of wkEntries) {
-        if (e.rABN > 0)  rows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                      client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
-        if (e.otABN > 0) rows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`,  client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
-      }
-      for (const item of items) rows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
-      rows.sort((a, b) => {
-        const d = a.date.localeCompare(b.date);
-        return d !== 0 ? d : (a.startTime ?? "").localeCompare(b.startTime ?? "");
+    if (userId) {
+      const saved = await saveInvoice(supabase, {
+        id: genId(), userId,
+        invoiceNum:  settings.invoiceNum || 1,
+        issueDate:   settings.invoiceDate || todayStr(),
+        companyName: settings.companyName || "",
+        subtotal,
+        settings: { ...settings, invoiceItems: extraItems },
+        rows,
+        periodStart: oldestWeek,
+        periodEnd:   wkSun,
       });
-
-      const wkAbn    = wkEntries.reduce((s, e) => s + e.abnEarnings, 0);
-      const subtotal = wkAbn + items.reduce((s, it) => s + it.amount, 0);
-
-      const wkSunDate = new Date(wkMon + "T12:00:00");
-      wkSunDate.setDate(wkSunDate.getDate() + 6);
-      const wkSun = wkSunDate.toISOString().slice(0, 10);
-
-      if (userId) {
-        const saved = await saveInvoice(supabase, {
-          id: genId(), userId,
-          invoiceNum:  nextNum,
-          issueDate,
-          companyName: settings.companyName || "",
-          subtotal,
-          settings: { ...settings, invoiceItems: items },
-          rows,
-          periodStart: wkMon,
-          periodEnd:   wkSun,
-        });
-        if (!saved) { showToast("Could not save invoice history", "err"); return; }
-        savedList.push(saved);
-      }
-      nextNum++;
+      if (!saved) { showToast("Could not save invoice history", "err"); return; }
+      setInvoiceHistory(prev => [saved, ...prev]);
     }
 
-    // Archive entries only after all invoices are safely saved
-    const toArchiveIds = allPeriodEntries.filter(e => !e.archived).map(e => e.id);
+    // Archive all entries from this week (TFN + ABN) now that the week is invoiced
+    const toArchiveIds = allPeriodEntries
+      .filter(e => !e.archived && weekStart(e.date) === oldestWeek)
+      .map(e => e.id);
     if (toArchiveIds.length > 0 && userId) {
       const ok = await archiveEntries(supabase, toArchiveIds);
       if (!ok) { showToast("Could not archive entries", "err"); return; }
       setEntries(prev => prev.map(e => toArchiveIds.includes(e.id) ? { ...e, archived: true } : e));
     }
 
-    setInvoiceHistory(prev => [...[...savedList].reverse(), ...prev]);
-
-    const firstNum = settings.invoiceNum || 1;
-    const s = { ...settings, invoiceNum: nextNum, invoiceDate: todayStr(), invoiceItems: [] };
+    const s = { ...settings, invoiceNum: (settings.invoiceNum || 1) + 1, invoiceDate: todayStr(), invoiceItems: [] };
     setSettings(s);
     if (userId) saveSettings(s, periodStart, periodEnd, userId);
-
-    const label = weeks.length === 1
-      ? `Invoice #${firstNum} saved`
-      : `${weeks.length} invoices saved (#${firstNum}–#${nextNum - 1})`;
-    showToast(label);
+    showToast(`Invoice #${settings.invoiceNum} saved`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, processed, allPeriodEntries, userId, periodStart, periodEnd]); // supabase/showToast/setters stable
 

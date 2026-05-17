@@ -151,7 +151,7 @@ export default function WorkHoursTracker() {
             periodStart={periodStart} periodEnd={periodEnd} />
         )}
         {tab === "abn" && userRole !== "admin" && (
-          <ABNInvoice processed={processed} totals={totals} settings={settings}
+          <ABNInvoice processed={processed} settings={settings}
             periodStart={periodStart} periodEnd={periodEnd}
             onAdvance={advanceInvoice} onItemsChange={updateInvoiceItems} />
         )}
