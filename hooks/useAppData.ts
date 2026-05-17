@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type {
-  Entry, EntryTemplate, ManagedUser, ProcessedEntry, Settings, Totals,
+  AuditEntry, Entry, EntryTemplate, ManagedUser, ProcessedEntry, Settings, Totals,
   FormState, Toast, InvLineRow, SavedInvoice, UserRole,
 } from "@/types";
 import { calcHours, processEntries } from "@/lib/calculations";
@@ -13,6 +13,7 @@ import { getEntries, getAdminEntries, upsertEntry, deleteEntry, archiveEntries }
 import { DEFAULT_SETTINGS, getSettings, getWorkerSettings, saveSettings as saveSettingsSvc, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
 import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
 import { getInvoices, saveInvoice, deleteInvoice } from "@/services/invoices";
+import { logActivity, getAuditLog } from "@/services/audit";
 
 export function useAppData() {
   const supabaseRef = useRef(createClient());
@@ -42,6 +43,15 @@ export function useAppData() {
   const [adminUserFilter, setAdminUserFilter] = useState<string>("all");
   const [workerSettings,     setWorkerSettings]     = useState<Record<string, Settings>>({});
   const [reminderDismissed,  setReminderDismissed]  = useState(false);
+  const [auditLog,           setAuditLog]           = useState<AuditEntry[]>([]);
+
+  // Refs for stale-closure-safe reads inside memoised callbacks
+  const entriesRef      = useRef<Entry[]>([]);
+  const managedUsersRef = useRef<ManagedUser[]>([]);
+  const userIdRef       = useRef<string | null>(null);
+  useEffect(() => { entriesRef.current      = entries;      }, [entries]);
+  useEffect(() => { managedUsersRef.current = managedUsers; }, [managedUsers]);
+  useEffect(() => { userIdRef.current       = userId;       }, [userId]);
 
   useEffect(() => {
     const saved = localStorage.getItem("wh_theme") as "light" | "dark" | null;
@@ -69,13 +79,15 @@ export function useAppData() {
       setUserRole(role);
 
       if (role === "admin") {
-        const [team, settingsRow] = await Promise.all([
+        const [team, settingsRow, log] = await Promise.all([
           getManagedTeam(supabase, user.id),
           getSettings(supabase, user.id),
+          getAuditLog(supabase),
         ]);
         setManagedUsers(team.users);
         setManagedAdmins(team.admins);
         setManagedViewers(team.viewers);
+        setAuditLog(log);
 
         const workerIds = team.users.map(u => u.id);
         const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
@@ -234,6 +246,16 @@ export function useAppData() {
     }
   }, [userRole]); // setters are stable
 
+  // Fire-and-forget: optimistically prepend to local log, persist in background
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const recordAudit = useCallback((action: string, targetType: string | null, targetId: string | null, meta: Record<string, unknown>) => {
+    const uid = userIdRef.current;
+    if (!uid) return;
+    const entry: AuditEntry = { id: genId(), adminId: uid, actorId: uid, action, targetType, targetId, meta, createdAt: new Date().toISOString() };
+    setAuditLog(prev => [entry, ...prev]);
+    logActivity(supabase, uid, uid, action, targetType, targetId, meta);
+  }, []); // supabase/setters/refs are stable
+
   const handleAdminSave = useCallback(async (updated: Entry) => {
     if (!userId) return;
     const ok = await saveEntry(updated, updated.ownerId ?? userId);
@@ -241,16 +263,23 @@ export function useAppData() {
     setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
     setAdminEditEntry(null);
     showToast("Entry updated");
-  }, [userId]); // saveEntry/showToast/setters are stable
+    const workerName = managedUsersRef.current.find(u => u.id === updated.ownerId)?.name ?? "worker";
+    recordAudit("entry_edited", "entry", updated.id, { workerName, entryDate: updated.date, jobDescription: updated.jobDescription });
+  }, [userId]); // saveEntry/showToast/setters/refs/recordAudit are stable
 
   const handleAdminClose = useCallback(() => setAdminEditEntry(null), []); // setAdminEditEntry is stable
 
   const handleDelete = useCallback(async (id: string) => {
+    const entry = entriesRef.current.find(e => e.id === id);
     const ok = await removeEntry(id);
     if (!ok) { showToast("Could not delete entry", "err"); return; }
     setEntries(prev => prev.filter(e => e.id !== id));
     showToast("Entry deleted");
-  }, []); // removeEntry/showToast/setEntries are stable
+    if (entry?.ownerId) {
+      const workerName = managedUsersRef.current.find(u => u.id === entry.ownerId)?.name ?? "worker";
+      recordAudit("entry_deleted", "entry", id, { workerName, entryDate: entry.date, jobDescription: entry.jobDescription });
+    }
+  }, []); // removeEntry/showToast/setters/refs/recordAudit are stable
 
   const handleSettingsSave = useCallback((s: Settings) => {
     setSettings(s);
@@ -270,9 +299,12 @@ export function useAppData() {
       })
     );
     if (results.some(ok => !ok)) showToast("Could not save some worker rules", "err");
-    else showToast("Worker rules saved");
+    else {
+      showToast("Worker rules saved");
+      recordAudit("worker_rules_saved", null, null, { workerCount: rules.length });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workerSettings]); // supabase/showToast/setters are stable
+  }, [workerSettings]); // supabase/showToast/setters/recordAudit are stable
 
   // ── Derived values ─────────────────────────────────────────────────────────
   // Memoised so processEntries (sort + multi-pass accumulation) only re-runs
@@ -327,22 +359,28 @@ export function useAppData() {
     return { allPeriodEntries, processed, weeklyData, totals, tfnPct };
   }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, userRole, workerSettings]);
 
-  const TABS = useMemo(() => userRole === "admin" || userRole === "viewer"
-    ? [
-        { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
-        { id: "entries",   label: "Entries",       icon: "ti-list"             },
-        { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"    },
-      ]
-    : [
-        { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
-        { id: "log",       label: "Log Entry",    icon: "ti-clock-plus"       },
-        { id: "entries",   label: "Entries",      icon: "ti-list"             },
-        { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
-        { id: "tfn",       label: "TFN Report",   icon: "ti-report"           },
-        { id: "abn",       label: "ABN Invoice",  icon: "ti-receipt"          },
-        { id: "history",   label: "Invoices",     icon: "ti-history"          },
-      ],
-  [userRole]);
+  const TABS = useMemo(() => {
+    if (userRole === "admin") return [
+      { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
+      { id: "entries",   label: "Entries",      icon: "ti-list"             },
+      { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
+      { id: "activity",  label: "Activity",     icon: "ti-activity"         },
+    ];
+    if (userRole === "viewer") return [
+      { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
+      { id: "entries",   label: "Entries",      icon: "ti-list"             },
+      { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
+    ];
+    return [
+      { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
+      { id: "log",       label: "Log Entry",    icon: "ti-clock-plus"       },
+      { id: "entries",   label: "Entries",      icon: "ti-list"             },
+      { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
+      { id: "tfn",       label: "TFN Report",   icon: "ti-report"           },
+      { id: "abn",       label: "ABN Invoice",  icon: "ti-receipt"          },
+      { id: "history",   label: "Invoices",     icon: "ti-history"          },
+    ];
+  }, [userRole]);
 
   const clients = useMemo(() =>
     [...new Set(entries.map(e => e.client).filter(Boolean))].sort() as string[],
@@ -358,6 +396,7 @@ export function useAppData() {
     const json = await res.json();
     if (!res.ok) { showToast(json.error ?? "Could not send invitation", "err"); return; }
     showToast(`Invitation sent to ${email}`);
+    recordAudit("invite_sent", null, null, { email, role });
     if (role === "admin") {
       const admins = await getManagedAdmins(supabase, userId!);
       setManagedAdmins(admins);
@@ -508,5 +547,6 @@ export function useAppData() {
     showOnboarding: !loading && userRole === "user" && !settings.onboardingCompleted && !settings.yourName,
     managedViewers,
     handleCompleteOnboarding,
+    auditLog,
   };
 }

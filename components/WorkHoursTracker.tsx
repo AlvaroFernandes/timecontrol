@@ -12,6 +12,7 @@ import { InvoiceHistory } from "./InvoiceHistory";
 import { AdminEditModal }    from "./AdminEditModal";
 import { SettingsPage }      from "./SettingsPage";
 import { OnboardingWizard }  from "./OnboardingWizard";
+import { ActivityLog }       from "./ActivityLog";
 
 export default function WorkHoursTracker() {
   const {
@@ -38,7 +39,7 @@ export default function WorkHoursTracker() {
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding, handleCompleteOnboarding,
-    managedViewers,
+    managedViewers, auditLog,
   } = useAppData();
 
   if (loading) {
@@ -158,6 +159,9 @@ export default function WorkHoursTracker() {
           <InvoiceHistory invoices={invoiceHistory} viewing={viewingInvoice}
             onView={setViewingInvoice} pdfNamePattern={settings.pdfNamePattern}
             onDelete={handleDeleteInvoice} />
+        )}
+        {tab === "activity" && userRole === "admin" && (
+          <ActivityLog entries={auditLog} />
         )}
         {tab === "settings" && userRole !== "viewer" && (
           <SettingsPage

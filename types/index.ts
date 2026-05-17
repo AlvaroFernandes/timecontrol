@@ -116,6 +116,17 @@ export interface InvLineRow {
   amount: number;
 }
 
+export interface AuditEntry {
+  id: string;
+  adminId: string;
+  actorId: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  meta: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface SavedInvoice {
   id: string;
   invoiceNum: number;
