@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import type { ManagedUser, Settings } from "@/types";
+import type { EntryTemplate, ManagedUser, Settings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/services/settings";
 
 interface WorkerRule {
@@ -122,6 +122,37 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
               <span style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 3 }}>
                 Variables: {"{num}"} {"{company}"} {"{date}"} {"{year}"} {"{month}"} {"{day}"}
               </span>
+            </div>
+            <div className="field full" style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 16, marginTop: 4 }}>
+              <label>Saved templates</label>
+              {(s.templates ?? []).length === 0 ? (
+                <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", margin: 0 }}>
+                  No templates yet. Use <strong>Save as template</strong> on the Log Entry tab to create one.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  {(s.templates ?? []).map((t: EntryTemplate) => (
+                    <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "var(--color-background-tertiary)", borderRadius: "var(--border-radius-md)" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>{t.jobDescription}</span>
+                        {t.client     && <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginLeft: 8 }}>@ {t.client}</span>}
+                        {t.hourlyRate && <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginLeft: 8 }}>${t.hourlyRate}/h</span>}
+                        {t.startTime && t.endTime && (
+                          <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginLeft: 8 }}>{t.startTime}–{t.endTime}</span>
+                        )}
+                      </div>
+                      <button
+                        className="icon-btn-sm danger"
+                        onClick={() => setS(prev => ({ ...prev, templates: (prev.templates ?? []).filter(x => x.id !== t.id) }))}
+                        aria-label={`Delete template: ${t.jobDescription}`}
+                        style={{ marginLeft: 8, flexShrink: 0 }}
+                      >
+                        <i className="ti ti-trash" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

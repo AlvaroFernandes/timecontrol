@@ -32,6 +32,15 @@ export interface ProcessedEntry extends Entry {
   totalEarnings: number;
 }
 
+export interface EntryTemplate {
+  id: string;
+  jobDescription: string;
+  client?: string;
+  hourlyRate?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
 export interface InvoiceItem {
   id: string;
   date: string;
@@ -62,6 +71,7 @@ export interface Settings {
   tfnLimit: number;
   overtimeThreshold: number;
   pdfNamePattern: string;
+  templates?: EntryTemplate[];
 }
 
 export interface Totals {

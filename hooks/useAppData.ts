@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type {
-  Entry, ManagedUser, ProcessedEntry, Settings, Totals,
+  Entry, EntryTemplate, ManagedUser, ProcessedEntry, Settings, Totals,
   FormState, Toast, InvLineRow, SavedInvoice,
 } from "@/types";
 import { calcHours, processEntries } from "@/lib/calculations";
@@ -389,6 +389,22 @@ export function useAppData() {
     setForm({ date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" });
   }, []); // all stable setters
 
+  const handleSaveTemplate = useCallback(() => {
+    if (!form.jobDescription.trim()) { showToast("Add a job description first", "err"); return; }
+    const template: EntryTemplate = {
+      id: genId(),
+      jobDescription: form.jobDescription.trim(),
+      ...(form.client.trim()  && { client:    form.client.trim()  }),
+      ...(form.hourlyRate     && { hourlyRate: form.hourlyRate     }),
+      ...(form.startTime      && { startTime:  form.startTime      }),
+      ...(form.endTime        && { endTime:    form.endTime        }),
+    };
+    const s = { ...settings, templates: [...(settings.templates ?? []), template] };
+    setSettings(s);
+    if (userId) saveSettings(s, periodStart, periodEnd, userId);
+    showToast("Template saved");
+  }, [form, settings, userId, periodStart, periodEnd]); // showToast/saveSettings/setSettings are stable
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleDeleteInvoice = useCallback(async (id: string) => {
     const ok = await deleteInvoice(supabase, id);
@@ -428,6 +444,6 @@ export function useAppData() {
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
-    updateInvoiceItems,
+    updateInvoiceItems, handleSaveTemplate,
   };
 }

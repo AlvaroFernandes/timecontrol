@@ -34,7 +34,7 @@ export default function WorkHoursTracker() {
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,
     advanceInvoice, handleDeleteInvoice, handleCancelEdit,
-    updateInvoiceItems,
+    updateInvoiceItems, handleSaveTemplate,
   } = useAppData();
 
   if (loading) {
@@ -90,7 +90,8 @@ export default function WorkHoursTracker() {
         )}
         {tab === "log" && userRole !== "admin" && (
           <LogEntry form={form} setForm={setForm} editId={editId}
-            onSave={handleSave} onCancel={handleCancelEdit} clients={clients} />
+            onSave={handleSave} onCancel={handleCancelEdit} clients={clients}
+            templates={settings.templates ?? []} onSaveTemplate={handleSaveTemplate} />
         )}
         {tab === "entries" && (
           <EntriesList processed={processed} onEdit={handleEdit} onDelete={handleDelete}

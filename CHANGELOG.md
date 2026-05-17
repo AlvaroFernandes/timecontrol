@@ -6,6 +6,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.26] - 2026-05-17
+
+### Added
+- **Entry templates** — save common work entries as reusable one-click templates
+  - `LogEntry.tsx` — "Quick fill" chip bar above the form when templates exist; clicking a chip prefills job description, client, rate, and start/end times; "Save as template" secondary button captures the current form fields
+  - `SettingsPage.tsx` — "Saved templates" list at the bottom of the Personal tab showing all templates with delete buttons; deletions are persisted on "Save Settings"
+  - `hooks/useAppData.ts` — `handleSaveTemplate` callback stores templates inside the existing `settings` JSONB column (no DB migration required)
+  - `types/index.ts` — `EntryTemplate` interface added; `templates?: EntryTemplate[]` added to `Settings`
+
+---
+
 ## [0.5.25] - 2026-05-17
 
 ### Added
