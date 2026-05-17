@@ -158,6 +158,12 @@ export function useAppData() {
     if (userId) saveSettings(settings, ps, pe, userId);
   }, [periodStart, periodEnd, userId, settings]); // saveSettings is stable
 
+  const clearPeriod = useCallback(() => {
+    setPeriodStart("");
+    setPeriodEnd("");
+    if (userId) saveSettings(settings, "", "", userId);
+  }, [userId, settings]); // saveSettings/setters are stable
+
   const handleSave = useCallback(async () => {
     const { date, jobDescription, startTime, endTime, hourlyRate } = form;
     if (!date || !jobDescription.trim() || !startTime || !endTime || !hourlyRate) {
@@ -459,7 +465,7 @@ export function useAppData() {
     // derived
     processed, weeklyData, totals, tfnPct, TABS,
     // handlers
-    toggleTheme, signOut, updatePeriod,
+    toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,

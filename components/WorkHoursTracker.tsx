@@ -29,7 +29,7 @@ export default function WorkHoursTracker() {
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
     processed, weeklyData, totals, tfnPct, TABS,
-    toggleTheme, signOut, updatePeriod,
+    toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,
@@ -63,6 +63,11 @@ export default function WorkHoursTracker() {
           <input type="date" value={periodStart} onChange={e => updatePeriod("start", e.target.value)} aria-label="Period start date" />
           <span aria-hidden="true">→</span>
           <input type="date" value={periodEnd}   onChange={e => updatePeriod("end",   e.target.value)} aria-label="Period end date" />
+          {(periodStart || periodEnd) && (
+            <button className="icon-btn" onClick={clearPeriod} aria-label="Clear period filter" title="Clear period">
+              <i className="ti ti-circle-x" aria-hidden="true" />
+            </button>
+          )}
         </div>
         <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
           <i className={`ti ${theme === "dark" ? "ti-sun" : "ti-moon"}`} aria-hidden="true" />
